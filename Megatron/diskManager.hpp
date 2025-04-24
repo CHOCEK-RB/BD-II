@@ -1,16 +1,15 @@
 #ifndef DISKMANAGER_HPP
 #define DISKMANAGER_HPP
 
+#include <string>
 #include <sys/types.h>
 #include <unordered_map>
-#include <string>
-class DiskManager{
-  private:
+class DiskManager {
+private:
   const std::string path;
   std::unordered_map<std::string, int> files;
-  
-  public:
-  
+
+public:
   DiskManager(const std::string &);
   ~DiskManager();
 
@@ -23,7 +22,7 @@ class DiskManager{
 
   bool writeFileLine(const std::string &, const std::string &);
 
-  bool clearCache();
+  void deleteFile(const std::string &);
 };
 
 #endif

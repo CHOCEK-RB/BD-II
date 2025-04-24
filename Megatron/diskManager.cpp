@@ -1,10 +1,10 @@
-#include "diskManager.hpp"
 #include "const.cpp"
+#include "diskManager.hpp"
 #include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <string>
 #include <unistd.h>
-#include <cstring>
 
 DiskManager::DiskManager(const std::string &path) : path(path) {}
 
@@ -12,12 +12,13 @@ DiskManager::~DiskManager() {
   for (auto &[name, fd] : files) {
     close(fd);
   }
+
   files.clear();
 }
 
 int DiskManager::openFile(const std::string &filename) {
   std::string fullPath = path + filename;
-  int fd = open(fullPath.c_str(), O_RDONLY);  // sin O_DIRECT
+  int fd = open(fullPath.c_str(), OPEN_MODES);
   if (fd == -1) {
     perror(("Error al abrir archivo: " + fullPath).c_str());
     return -1;
@@ -27,7 +28,8 @@ int DiskManager::openFile(const std::string &filename) {
 }
 
 bool DiskManager::closeFile(const std::string &filename) {
-  if (files.find(filename) == files.end()) return false;
+  if (files.find(filename) == files.end())
+    return false;
   close(files[filename]);
   files.erase(filename);
   return true;
@@ -39,7 +41,8 @@ bool DiskManager::isOpen(const std::string &file) {
 
 off_t DiskManager::getLine(const std::string &filename, std::string &line) {
   line.clear();
-  if (files.find(filename) == files.end()) return -1;
+  if (files.find(filename) == files.end())
+    return -1;
 
   int fd = files[filename];
   char buffer[BUFFER_SIZE];
@@ -63,7 +66,8 @@ off_t DiskManager::getLine(const std::string &filename, std::string &line) {
       }
       line += buffer[i];
     }
-    if (foundNewline) break;
+    if (foundNewline)
+      break;
   }
 
   if (bytesRead == -1) {
@@ -76,7 +80,7 @@ off_t DiskManager::getLine(const std::string &filename, std::string &line) {
     return currentPos;
   }
 
-  if (bytesRead == 0){
+  if (bytesRead == 0) {
     return -1;
   }
 
@@ -84,16 +88,19 @@ off_t DiskManager::getLine(const std::string &filename, std::string &line) {
   return -1;
 }
 
-off_t DiskManager::setPosition(const std::string &filename, off_t offset, int whence) {
-  if (files.find(filename) == files.end()) return -1;
+off_t DiskManager::setPosition(const std::string &filename, off_t offset,
+                               int whence) {
+  if (files.find(filename) == files.end())
+    return -1;
   return lseek(files[filename], offset, whence);
 }
 
-bool DiskManager::writeFileLine(const std::string &filename, const std::string &line) {
+bool DiskManager::writeFileLine(const std::string &filename,
+                                const std::string &line) {
   int fd;
   if (files.find(filename) == files.end()) {
     std::string fullPath = path + filename;
-    fd = open(fullPath.c_str(), O_RDWR | O_CREAT | O_APPEND, 0644);
+    fd = open(fullPath.c_str(), WRITE_FLAGS, WRITE_MODE);
     if (fd == -1) {
       perror(("Error al abrir archivo para escribir: " + fullPath).c_str());
       return false;
@@ -116,9 +123,8 @@ bool DiskManager::writeFileLine(const std::string &filename, const std::string &
   return true;
 }
 
-bool DiskManager::clearCache(){
-  std::string fullPath= path + TMP_SCHEMAS;
+void DiskManager::deleteFile(const std::string &file) {
+  std::string fullPath = path + file;
   const char *pointer = fullPath.c_str();
   remove(pointer);
-  return true;
 }

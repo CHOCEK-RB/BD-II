@@ -1,9 +1,9 @@
 #ifndef MEGATRON_HPP
 #define MEGATRON_HPP
 
+#include "diskManager.hpp"
 #include <string>
 #include <vector>
-#include "diskManager.hpp"
 
 struct AttributeInfo {
   std::string type;
@@ -17,7 +17,7 @@ private:
   long int size;
 
   DiskManager *diskManager;
-  
+
   std::vector<AttributeInfo> attributesInfo;
 
   bool loadSchema(const std::string &, const std::string &);
@@ -26,16 +26,15 @@ private:
   void recorrerCartesian(int, std::vector<int> &, std::vector<std::string> &,
                          std::vector<std::string> &, const std::string &);
 
-  std::vector<std::string> split(const std::string &, const char);
-
   bool existTables(const std::vector<std::string> &, const std::string &);
   bool existAttributes(const std::vector<std::string> &,
-                       const std::vector<std::string> &,
-                       const std::string &);
+                       const std::vector<std::string> &, const std::string &);
 
   short int positionAttribute(const std::string &, const std::string &);
 
   std::string searchInEsquema(const std::string &, short int);
+
+  void clearCache();
 
 public:
   Megatron() : size(500 * 1024 * 1024), diskManager(nullptr) {};
