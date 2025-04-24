@@ -1,31 +1,51 @@
 #include "megatron.hpp"
+#include "const.cpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-Megatron::~Megatron() {}
 
-void Megatron::loadSchemas(std::ifstream &file) {
-  if (!this->schemas.empty()) {
-    this->schemas.clear();
-  }
-
+Megatron::~Megatron() {
+  delete diskManager;
+}
+bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
   std::string line;
 
-  while (getline(file, line)) {
+  while (diskManager->getLine(file, line) != END) {
     size_t pos = line.find('#');
     if (pos != std::string::npos) {
-      std::string table = line.substr(0, pos);
-      this->schemas[table] = line;
+      std::string _schema = line.substr(0, pos);
+      if (_schema == schema){
+        if(diskManager->writeFileLine(TMP_SCHEMAS, line)){
+          diskManager->setPosition(file, 0, SEEK_SET);
+          return true;
+        };
+      }
     }
   }
+
+  return false;
+}
+
+std::string Megatron::getSchema(const std::string &file, const std::string &schema){
+  std::string line;
+
+  while(diskManager ->getLine(file, line) != END){
+    size_t pos = line.find('#');
+    if (pos != std::string::npos) {
+      std::string _schema = line.substr(0, pos);
+      if (_schema == schema){
+        diskManager->setPosition(file, 0, SEEK_SET);
+        return line;
+      }
+    }
+  }
+
+  return "";
 }
 
 std::string trim(const std::string &string) {
@@ -49,36 +69,26 @@ std::vector<std::string> Megatron::split(const std::string &text,
 }
 
 void Megatron::recorrerCartesian(int nivel, std::vector<int> &tablesOrder,
-                                 std::vector<std::ifstream> &files,
+                                 std::vector<std::string> &files,
                                  std::vector<std::string> &currentLines,
-                                 std::ofstream &tmp) {
+                                 const std::string &tmp) {
   if (nivel == files.size()) {
     // Tenemos una combinación completa
     std::string outputLine;
     for (const auto &attr : this->attributesInfo) {
       const std::string &line = currentLines[attr.tableIndex];
-      /*
-      auto parts = split(line, '#'); // suponiendo TSV
-      if (attr.attributeIndex < parts.size()) {
-        outputLine += parts[attr.position] + "#";
-      } else {
-        outputLine += "#";
-      }
-      */
       auto part = searchInEsquema(line, attr.position) + "#";
       outputLine += part;
     }
-    outputLine.pop_back(); // quitar último #
-    tmp << outputLine << "\n";
+    outputLine.pop_back();
+    diskManager -> writeFileLine(tmp, outputLine);
     return;
   }
 
-  std::ifstream &file = files[nivel];
-  file.clear();
-  file.seekg(0);
+  diskManager->setPosition(files[nivel], 0, SEEK_SET);
 
   std::string line;
-  while (getline(file, line)) {
+  while (diskManager->getLine(files[nivel], line) != END) {
     currentLines[tablesOrder[nivel]] = line;
     recorrerCartesian(nivel + 1, tablesOrder, files, currentLines, tmp);
   }
@@ -102,15 +112,6 @@ short Megatron::positionAttribute(const std::string &line,
   return -1;
 }
 
-std::string Megatron::searchTable(const std::string &table) {
-
-  if (this->schemas.find(table) == this->schemas.end()) {
-    return "";
-  }
-
-  return this->schemas[table];
-}
-
 std::string Megatron::searchInEsquema(const std::string &line, short position) {
   int count = 0;
   size_t start = 0, end = line.find('#');
@@ -125,9 +126,9 @@ std::string Megatron::searchInEsquema(const std::string &line, short position) {
   return line.substr(start, end - start);
 }
 
-bool Megatron::existTables(const std::vector<std::string> &tables) {
+bool Megatron::existTables(const std::vector<std::string> &tables, const std::string &file) {
   for (const auto &table : tables) {
-    if (this->schemas.find(table) == this->schemas.end()) {
+    if (!loadSchema(file, table)) {
       std::cerr << "La tabla '" << table << "' no existe en esquemas.\n";
       return false;
     }
@@ -137,7 +138,8 @@ bool Megatron::existTables(const std::vector<std::string> &tables) {
 }
 
 bool Megatron::existAttributes(const std::vector<std::string> &tables,
-                               const std::vector<std::string> &attributes) {
+                               const std::vector<std::string> &attributes,
+                               const std::string &file) {
   if (!this->attributesInfo.empty()) {
     this->attributesInfo.clear();
   }
@@ -158,7 +160,7 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
         return false;
       }
 
-      std::string schemaLine = searchTable(table);
+      std::string schemaLine = getSchema(file, table);
       short pos = positionAttribute(schemaLine, attribute);
       if (pos == -1) {
         std::cerr << "El atributo " << attr << " no se ha encontrado\n";
@@ -175,7 +177,7 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
 
     } else {
       for (size_t j = 0; j < tables.size(); ++j) {
-        std::string schemaLine = searchTable(tables[j]);
+        std::string schemaLine = getSchema(file, tables[j]);
         short pos = positionAttribute(schemaLine, attr);
         if (pos != -1) {
           if (found) {
@@ -204,10 +206,6 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
 }
 
 void Megatron::init() {
-  std::filesystem::path path = PATH;
-  if (!std::filesystem::is_directory(path))
-    std::filesystem::create_directory(PATH);
-
   std::cout << "% Megatron 3000\n\tWelcome to Megatron 3000!\n";
   switch (showMenu()) {
   case 1:
@@ -256,20 +254,20 @@ void Megatron::saveMenu(const std::string &select, const std::string &from,
 
 void Megatron::selectFuntion(const std::string &select, const std::string &from,
                              const std::string conditions[], bool save) {
-  std::ifstream esquemas(PATH "/db/esquema.txt");
+  diskManager = new DiskManager(PATH);
 
-  if (!esquemas.is_open()) {
+  diskManager->openFile(SCHEMA);
+
+  if(!diskManager->isOpen(SCHEMA)){
     return;
   }
 
-  loadSchemas(esquemas);
-
   auto tables = split(from, ',');
-  if (!existTables(tables))
+  if (!existTables(tables, SCHEMA))
     return;
 
   auto atributos = split(select, ',');
-  if (!existAttributes(tables, atributos))
+  if (!existAttributes(tables, atributos, TMP_SCHEMAS))
     return;
 
   // Muestra información de atributos (debug)
@@ -288,38 +286,22 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
     }
   }
 
-  // Cargar paths de los archivos
   std::vector<std::string> filePaths;
   for (int index : tablesOrder) {
-    filePaths.push_back(PATH "/db/" + tables[index] + ".txt");
+    filePaths.push_back(tables[index] + ".txt");
   }
 
-  // Abrir los archivos
-  std::vector<std::ifstream> files;
   for (const auto &path : filePaths) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-      std::cerr << "Error al abrir el archivo: " << path << std::endl;
-      return;
-    }
-    files.push_back(std::move(file));
-  }
+    diskManager -> openFile(path);
 
-  std::ofstream tmp(PATH "/tmp.txt");
-  if (!tmp.is_open()) {
-    std::cerr << "No se pudo crear el archivo temporal.\n";
-    return;
+    if(!diskManager->isOpen(path)){
+      std::cerr << "Error al abrir el archivo " << path << "\n";
+    }
   }
 
   std::vector<std::string> currentLines(tablesOrder.size());
 
-  // Función recursiva para recorrer el producto cartesiano
-  recorrerCartesian(0, tablesOrder, files, currentLines, tmp);
+  recorrerCartesian(0, tablesOrder, filePaths, currentLines, TMP_RESULT);
 
-  // Cerrar archivos
-  for (auto &f : files) {
-    f.close();
-  }
-
-  tmp.close();
+  delete diskManager; 
 }
