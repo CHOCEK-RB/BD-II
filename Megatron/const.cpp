@@ -12,4 +12,5 @@ constexpr off_t END = -1;
 constexpr size_t BUFFER_SIZE = 1024;
 constexpr auto TMP_SCHEMAS = ".schema_tmp.txt";
 constexpr auto TMP_ATTRIBUTES = ".attributes_tmp.txt";
+constexpr auto TMP_LINES = ".lines_tmp.txt";
 constexpr auto TMP_RESULT = ".tmp.txt";

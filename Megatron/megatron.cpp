@@ -28,6 +28,28 @@ bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
   return false;
 }
 
+bool Megatron::loadSchemaFiles(std::vector<std::string> &files) {
+  if (!diskManager->isOpen(TMP_ATTRIBUTES)) {
+    diskManager->openFile(TMP_ATTRIBUTES);
+  }
+
+  std::string line;
+
+  while (diskManager->getLine(TMP_ATTRIBUTES, line) != -1) {
+    auto file = line.substr(0, line.find(".")) + ".txt";
+    if (!diskManager->isOpen(file)) {
+      diskManager->openFile(file);
+      files.push_back(file);
+    }
+
+    if (!diskManager->isOpen(file)) {
+      std::cerr << "Error al abrir el archivo " << file << "\n";
+      return false;
+    }
+  }
+  return true;
+};
+
 std::string Megatron::getSchema(const std::string &file,
                                 const std::string &schema) {
   std::string line;
@@ -46,17 +68,23 @@ std::string Megatron::getSchema(const std::string &file,
   return "";
 }
 
-void Megatron::recorrerCartesian(int nivel, std::vector<int> &tablesOrder,
-                                 std::vector<std::string> &files,
-                                 std::vector<std::string> &currentLines,
+void Megatron::recorrerCartesian(int nivel, std::vector<std::string> &files,
                                  const std::string &tmp) {
   if (nivel == files.size()) {
     std::string outputLine;
-    for (const auto &attr : this->attributesInfo) {
-      const std::string &line = currentLines[attr.tableIndex];
-      auto part = searchInEsquema(line, attr.position) + "#";
+    std::string attr;
+
+    diskManager->setPosition(TMP_ATTRIBUTES, 0, SEEK_SET);
+
+    while (diskManager->getLine(TMP_ATTRIBUTES, attr) != END) {
+      auto schema = (attr.substr(0, attr.find('.')));
+      auto position = searchInEsquema(attr, 2);
+
+      const std::string &line = getSchema(TMP_LINES, schema);
+      auto part = searchInEsquema(line, std::stoi(position) + 1) + "#";
       outputLine += part;
     }
+
     outputLine.pop_back();
     diskManager->writeFileLine(tmp, outputLine);
     return;
@@ -66,8 +94,11 @@ void Megatron::recorrerCartesian(int nivel, std::vector<int> &tablesOrder,
 
   std::string line;
   while (diskManager->getLine(files[nivel], line) != END) {
-    currentLines[tablesOrder[nivel]] = line;
-    recorrerCartesian(nivel + 1, tablesOrder, files, currentLines, tmp);
+    line = files[nivel].substr(0, files[nivel].find(".")) + "#" + line;
+    if (!diskManager->replaceLine(TMP_LINES, nivel, line)) {
+      return;
+    }
+    recorrerCartesian(nivel + 1, files, tmp);
   }
 };
 
@@ -118,10 +149,6 @@ bool Megatron::existTables(const std::vector<std::string> &tables,
 bool Megatron::existAttributes(const std::vector<std::string> &tables,
                                const std::vector<std::string> &attributes,
                                const std::string &file) {
-  if (!this->attributesInfo.empty()) {
-    this->attributesInfo.clear();
-  }
-
   for (size_t i = 0; i < attributes.size(); ++i) {
     const auto &attr = attributes[i];
     bool found = false;
@@ -146,12 +173,9 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
       }
 
       std::string type = searchInEsquema(schemaLine, (pos + 1) * 2);
-      AttributeInfo attrInfo;
-      attrInfo.type = type;
-      attrInfo.attributeIndex = i;
-      attrInfo.tableIndex = std::distance(tables.begin(), it);
-      attrInfo.position = pos;
-      attributesInfo.push_back(attrInfo);
+
+      diskManager->writeFileLine(TMP_ATTRIBUTES,
+                                 attr + "#" + type + "#" + std::to_string(pos));
 
     } else {
       for (size_t j = 0; j < tables.size(); ++j) {
@@ -163,12 +187,11 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
             return false;
           }
           std::string type = searchInEsquema(schemaLine, (pos + 1) * 2);
-          AttributeInfo attrInfo;
-          attrInfo.type = type;
-          attrInfo.attributeIndex = i;
-          attrInfo.tableIndex = j;
-          attrInfo.position = pos;
-          attributesInfo.push_back(attrInfo);
+
+          diskManager->writeFileLine(TMP_ATTRIBUTES,
+                                     tables[j] + "." + attributes[i] + "#" +
+                                         type + "#" + std::to_string(pos));
+
           found = true;
         }
       }
@@ -185,6 +208,8 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
 
 void Megatron::clearCache() {
   diskManager->deleteFile(TMP_SCHEMAS);
+  diskManager->deleteFile(TMP_ATTRIBUTES);
+  diskManager->deleteFile(TMP_LINES);
   diskManager->deleteFile(TMP_RESULT);
 }
 
@@ -239,6 +264,8 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
                              const std::string conditions[], bool save) {
   diskManager = new DiskManager(PATH);
 
+  clearCache();
+
   diskManager->openFile(SCHEMA);
 
   if (!diskManager->isOpen(SCHEMA)) {
@@ -253,38 +280,15 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
   if (!existAttributes(tables, atributos, TMP_SCHEMAS))
     return;
 
-  // Muestra información de atributos (debug)
-  for (auto &attr : this->attributesInfo) {
-    std::cout << attr.type << "|" << attr.attributeIndex << "|"
-              << attr.tableIndex << "|" << attr.position << std::endl;
-  }
-
-  // Orden único de tablas basado en los atributos
-  std::vector<int> tablesOrder;
-  for (const auto &attr : attributesInfo) {
-    auto it =
-        std::find(tablesOrder.begin(), tablesOrder.end(), attr.tableIndex);
-    if (it == tablesOrder.end()) {
-      tablesOrder.push_back(attr.tableIndex);
-    }
-  }
-
   std::vector<std::string> filePaths;
-  for (int index : tablesOrder) {
-    filePaths.push_back(tables[index] + ".txt");
+  if (!loadSchemaFiles(filePaths))
+    return;
+
+  for (int i = 0; i < filePaths.size(); ++i) {
+    diskManager->writeFileLine(TMP_LINES, " ");
   }
 
-  for (const auto &path : filePaths) {
-    diskManager->openFile(path);
-
-    if (!diskManager->isOpen(path)) {
-      std::cerr << "Error al abrir el archivo " << path << "\n";
-    }
-  }
-
-  std::vector<std::string> currentLines(tablesOrder.size());
-
-  recorrerCartesian(0, tablesOrder, filePaths, currentLines, TMP_RESULT);
+  recorrerCartesian(0, filePaths, TMP_RESULT);
 
   delete diskManager;
 }

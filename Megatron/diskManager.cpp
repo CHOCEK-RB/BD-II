@@ -123,6 +123,81 @@ bool DiskManager::writeFileLine(const std::string &filename,
   return true;
 }
 
+bool DiskManager::replaceLine(const std::string &filename, size_t lineNumber,
+                              const std::string &newLine) {
+  std::string tempPath = path + filename + ".tmp";
+
+  if (!isOpen(filename)) {
+    perror(("EL archivo " + filename + " no esta abierto\n").c_str());
+  }
+
+  int fdTemp = open(tempPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (fdTemp == -1) {
+    perror(("Error al crear archivo temporal: " + tempPath).c_str());
+    return false;
+  }
+
+  char buffer[BUFFER_SIZE];
+  std::string line;
+  ssize_t bytesRead;
+  size_t currentLine = 0;
+  off_t pos = 0;
+
+  while ((bytesRead = pread(files[filename], buffer, BUFFER_SIZE, pos)) > 0) {
+    for (ssize_t i = 0; i < bytesRead; ++i) {
+      pos++;
+      if (buffer[i] == '\n') {
+        if (currentLine == lineNumber) {
+          std::string replaced = newLine + "\n";
+          if (write(fdTemp, replaced.c_str(), replaced.size()) == -1) {
+            perror("Error escribiendo línea reemplazada");
+            close(fdTemp);
+            return false;
+          }
+
+        } else {
+          line += '\n';
+          if (write(fdTemp, line.c_str(), line.size()) == -1) {
+            perror("Error escribiendo línea normal");
+            close(fdTemp);
+            return false;
+          }
+        }
+        line.clear();
+        currentLine++;
+      } else {
+        line += buffer[i];
+      }
+    }
+  }
+
+  if (!line.empty() && currentLine == lineNumber) {
+    std::string replaced = newLine + "\n";
+    write(fdTemp, replaced.c_str(), replaced.size());
+
+  } else if (!line.empty()) {
+    line += "\n";
+    write(fdTemp, line.c_str(), line.size());
+  }
+
+  closeFile(filename);
+  close(fdTemp);
+
+  if (rename(tempPath.c_str(), (path + filename).c_str()) == -1) {
+    perror("Error al reemplazar archivo original");
+    return false;
+  }
+
+  openFile(filename);
+
+  if (!isOpen(filename)) {
+    perror(("Error al reabrir el archivo " + filename).c_str());
+    return false;
+  }
+
+  return true;
+}
+
 void DiskManager::deleteFile(const std::string &file) {
   std::string fullPath = path + file;
   const char *pointer = fullPath.c_str();

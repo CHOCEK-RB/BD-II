@@ -18,13 +18,11 @@ private:
 
   DiskManager *diskManager;
 
-  std::vector<AttributeInfo> attributesInfo;
-
   bool loadSchema(const std::string &, const std::string &);
+  bool loadSchemaFiles(std::vector<std::string> &);
   std::string getSchema(const std::string &, const std::string &);
 
-  void recorrerCartesian(int, std::vector<int> &, std::vector<std::string> &,
-                         std::vector<std::string> &, const std::string &);
+  void recorrerCartesian(int, std::vector<std::string> &, const std::string &);
 
   bool existTables(const std::vector<std::string> &, const std::string &);
   bool existAttributes(const std::vector<std::string> &,
