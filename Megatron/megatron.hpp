@@ -31,6 +31,8 @@ private:
   short int positionAttribute(const std::string &, const std::string &);
 
   std::string searchInEsquema(const std::string &, short int);
+  
+  void showResult();
 
   void clearCache();
 

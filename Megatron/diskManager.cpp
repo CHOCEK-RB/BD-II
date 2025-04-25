@@ -16,22 +16,30 @@ DiskManager::~DiskManager() {
   files.clear();
 }
 
-int DiskManager::openFile(const std::string &filename) {
-  std::string fullPath = path + filename;
-  int fd = open(fullPath.c_str(), OPEN_MODES);
-  if (fd == -1) {
-    perror(("Error al abrir archivo: " + fullPath).c_str());
-    return -1;
+int DiskManager::openFile(const std::string &file, int flags) {
+
+  int fd;
+  if (flags == READ_FLAGS)
+    fd = open((path + file).c_str(), flags);
+  
+  else
+    fd = open((path + file).c_str(), flags, WRITE_MODE);
+
+  if (fd == NOT_OPEN) {
+    perror((ERR_OPEN_FILE + file).c_str());
+    return NOT_OPEN;
   }
-  files[filename] = fd;
+
+  files[file] = fd;
   return fd;
 }
 
-bool DiskManager::closeFile(const std::string &filename) {
-  if (files.find(filename) == files.end())
+bool DiskManager::closeFile(const std::string &file) {
+  if (!isOpen(file))
     return false;
-  close(files[filename]);
-  files.erase(filename);
+
+  close(files[file]);
+  files.erase(file);
   return true;
 }
 
@@ -39,18 +47,21 @@ bool DiskManager::isOpen(const std::string &file) {
   return files.find(file) != files.end();
 }
 
-off_t DiskManager::getLine(const std::string &filename, std::string &line) {
+off_t DiskManager::getLine(const std::string &file, std::string &line) {
   line.clear();
-  if (files.find(filename) == files.end())
-    return -1;
 
-  int fd = files[filename];
+  if (!isOpen(file)) {
+    perror((ERR_GETLINE_NOT_OPEN_FILE + file).c_str());
+    return -1;
+  }
+
+  int fd = files[file];
   char buffer[BUFFER_SIZE];
   ssize_t bytesRead;
   off_t startPos = lseek(fd, 0, SEEK_CUR);
 
   if (startPos == -1) {
-    perror("lseek failed");
+    perror("Error al usar la funcion lseek");
     return -1;
   }
 
@@ -71,7 +82,7 @@ off_t DiskManager::getLine(const std::string &filename, std::string &line) {
   }
 
   if (bytesRead == -1) {
-    perror(("Error al leer el archivo " + filename).c_str());
+    perror((ERR_GETLINE_NOT_READ + file).c_str());
     return -1;
   }
 
@@ -84,30 +95,30 @@ off_t DiskManager::getLine(const std::string &filename, std::string &line) {
     return -1;
   }
 
-  perror(("No se pudo obtener la línea de " + filename).c_str());
   return -1;
 }
 
-off_t DiskManager::setPosition(const std::string &filename, off_t offset,
+off_t DiskManager::setPosition(const std::string &file, off_t offset,
                                int whence) {
-  if (files.find(filename) == files.end())
+  if (!isOpen(file)) {
+    perror((ERR_NOT_OPEN + file).c_str());
     return -1;
-  return lseek(files[filename], offset, whence);
+  }
+
+  return lseek(files[file], offset, whence);
 }
 
-bool DiskManager::writeFileLine(const std::string &filename,
+bool DiskManager::writeFileLine(const std::string &file,
                                 const std::string &line) {
   int fd;
-  if (files.find(filename) == files.end()) {
-    std::string fullPath = path + filename;
-    fd = open(fullPath.c_str(), WRITE_FLAGS, WRITE_MODE);
-    if (fd == -1) {
-      perror(("Error al abrir archivo para escribir: " + fullPath).c_str());
+
+  if (!isOpen(file)) {
+    if ((fd = openFile(file, READ_WRITE_FLAGS)) == NOT_OPEN) {
       return false;
     }
-    files[filename] = fd;
+
   } else {
-    fd = files[filename];
+    fd = files[file];
     lseek(fd, 0, SEEK_END);
   }
 
@@ -115,7 +126,7 @@ bool DiskManager::writeFileLine(const std::string &filename,
   ssize_t written = write(fd, finalLine.c_str(), finalLine.size());
 
   if (written != (ssize_t)finalLine.size()) {
-    perror(("Error al intentar escribir en el archivo " + filename).c_str());
+    perror((ERR_NOT_WRIT_NEW_LINE + file).c_str());
     return false;
   }
 
@@ -123,16 +134,19 @@ bool DiskManager::writeFileLine(const std::string &filename,
   return true;
 }
 
-bool DiskManager::replaceLine(const std::string &filename, size_t lineNumber,
+bool DiskManager::replaceLine(const std::string &file, size_t lineNumber,
                               const std::string &newLine) {
-  std::string tempPath = path + filename + ".tmp";
+  std::string tempPath = path + file + ".tmp";
 
-  if (!isOpen(filename)) {
-    perror(("EL archivo " + filename + " no esta abierto\n").c_str());
+  if (!isOpen(file)) {
+    perror((ERR_NOT_OPEN + file).c_str());
+    return false;
   }
 
-  int fdTemp = open(tempPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if (fdTemp == -1) {
+  int fdOrig = files[file];
+  int fdTemp = open(tempPath.c_str(), WRITE_FLAGS, 0644);
+
+  if (fdTemp == NOT_OPEN) {
     perror(("Error al crear archivo temporal: " + tempPath).c_str());
     return false;
   }
@@ -143,7 +157,7 @@ bool DiskManager::replaceLine(const std::string &filename, size_t lineNumber,
   size_t currentLine = 0;
   off_t pos = 0;
 
-  while ((bytesRead = pread(files[filename], buffer, BUFFER_SIZE, pos)) > 0) {
+  while ((bytesRead = pread(fdOrig, buffer, BUFFER_SIZE, pos)) > 0) {
     for (ssize_t i = 0; i < bytesRead; ++i) {
       pos++;
       if (buffer[i] == '\n') {
@@ -180,20 +194,16 @@ bool DiskManager::replaceLine(const std::string &filename, size_t lineNumber,
     write(fdTemp, line.c_str(), line.size());
   }
 
-  closeFile(filename);
+  closeFile(file);
   close(fdTemp);
 
-  if (rename(tempPath.c_str(), (path + filename).c_str()) == -1) {
+  if (rename(tempPath.c_str(), (path + file).c_str()) == -1) {
     perror("Error al reemplazar archivo original");
     return false;
   }
 
-  openFile(filename);
-
-  if (!isOpen(filename)) {
-    perror(("Error al reabrir el archivo " + filename).c_str());
+  if (openFile(file, READ_FLAGS) == NOT_OPEN)
     return false;
-  }
 
   return true;
 }

@@ -9,6 +9,7 @@
 #include <vector>
 
 Megatron::~Megatron() { delete diskManager; }
+
 bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
   std::string line;
 
@@ -16,11 +17,9 @@ bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
     size_t pos = line.find('#');
     if (pos != std::string::npos) {
       std::string _schema = line.substr(0, pos);
-      if (_schema == schema) {
-        if (diskManager->writeFileLine(TMP_SCHEMAS, line)) {
-          diskManager->setPosition(file, 0, SEEK_SET);
-          return true;
-        };
+      if (_schema == schema && diskManager->writeFileLine(TMP_SCHEMAS, line)) {
+        diskManager->setPosition(file, 0, SEEK_SET);
+        return true;
       }
     }
   }
@@ -30,21 +29,19 @@ bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
 
 bool Megatron::loadSchemaFiles(std::vector<std::string> &files) {
   if (!diskManager->isOpen(TMP_ATTRIBUTES)) {
-    diskManager->openFile(TMP_ATTRIBUTES);
+    diskManager->openFile(TMP_ATTRIBUTES, READ_FLAGS);
   }
 
   std::string line;
 
-  while (diskManager->getLine(TMP_ATTRIBUTES, line) != -1) {
+  while (diskManager->getLine(TMP_ATTRIBUTES, line) != END) {
     auto file = line.substr(0, line.find(".")) + ".txt";
-    if (!diskManager->isOpen(file)) {
-      diskManager->openFile(file);
-      files.push_back(file);
-    }
 
     if (!diskManager->isOpen(file)) {
-      std::cerr << "Error al abrir el archivo " << file << "\n";
-      return false;
+      if (diskManager->openFile(file, READ_FLAGS) == NOT_OPEN)
+        return false;
+
+      files.push_back(file);
     }
   }
   return true;
@@ -56,8 +53,10 @@ std::string Megatron::getSchema(const std::string &file,
 
   while (diskManager->getLine(file, line) != END) {
     size_t pos = line.find('#');
+
     if (pos != std::string::npos) {
       std::string _schema = line.substr(0, pos);
+
       if (_schema == schema) {
         diskManager->setPosition(file, 0, SEEK_SET);
         return line;
@@ -70,19 +69,55 @@ std::string Megatron::getSchema(const std::string &file,
 
 void Megatron::recorrerCartesian(int nivel, std::vector<std::string> &files,
                                  const std::string &tmp) {
+  if (!diskManager->isOpen(tmp)) {
+    diskManager->setPosition(TMP_ATTRIBUTES, 0, SEEK_SET);
+
+    std::string attributesLine;
+
+    for (std::string line; diskManager->getLine(TMP_ATTRIBUTES, line) != END;) {
+      auto schemaAttribute = searchInEsquema(line, 0);
+      auto attribute = schemaAttribute.substr(schemaAttribute.find(".") + 1);
+      attributesLine += attribute + "#";
+
+      diskManager->writeFileLine(TMP_SIZE_ATTRIBUTES,
+                                 schemaAttribute + "#" +
+                                     std::to_string(attribute.size()));
+    }
+
+    attributesLine.pop_back();
+    diskManager->writeFileLine(tmp, attributesLine);
+  }
+
   if (nivel == files.size()) {
     std::string outputLine;
     std::string attr;
 
     diskManager->setPosition(TMP_ATTRIBUTES, 0, SEEK_SET);
+    diskManager->setPosition(TMP_SIZE_ATTRIBUTES, 0, SEEK_SET);
 
+    int i = 0;
     while (diskManager->getLine(TMP_ATTRIBUTES, attr) != END) {
-      auto schema = (attr.substr(0, attr.find('.')));
+
+      auto schemaAttribute = searchInEsquema(attr, 0);
+      auto schema = attr.substr(0, schemaAttribute.find("."));
+
       auto position = searchInEsquema(attr, 2);
 
-      const std::string &line = getSchema(TMP_LINES, schema);
-      auto part = searchInEsquema(line, std::stoi(position) + 1) + "#";
-      outputLine += part;
+      auto line = getSchema(TMP_LINES, schema);
+      auto part = searchInEsquema(line, std::stoi(position) + 1);
+
+      line = getSchema(TMP_SIZE_ATTRIBUTES, schemaAttribute);
+      auto sizeAttr = searchInEsquema(line, 1);
+
+      if (part.size() > std::stoi(sizeAttr)) {
+        line = schemaAttribute + "#" + std::to_string(part.size());
+
+        if (!diskManager->replaceLine(TMP_SIZE_ATTRIBUTES, i, line))
+          return;
+      }
+
+      outputLine += part + "#";
+      ++i;
     }
 
     outputLine.pop_back();
@@ -206,11 +241,75 @@ bool Megatron::existAttributes(const std::vector<std::string> &tables,
   return true;
 }
 
+void Megatron::showResult() {
+  std::string line;
+  std::string lineVertical;
+
+  diskManager->setPosition(TMP_RESULT, 0, SEEK_SET);
+  diskManager->setPosition(TMP_SIZE_ATTRIBUTES, 0, SEEK_SET);
+
+  if (diskManager->getLine(TMP_RESULT, line) != END) {
+    int i = 0;
+
+    std::string lineSize;
+    std::string outputLine;
+
+    while (diskManager->getLine(TMP_SIZE_ATTRIBUTES, lineSize) != END) {
+      int size = std::stoi(searchInEsquema(lineSize, 1));
+
+      auto part = searchInEsquema(line, i);
+
+      if (i == 0) {
+        outputLine += "|";
+        lineVertical += "+";
+      }
+
+      auto partFinal = " " + part + std::string((size - part.size() + 3), ' ');
+      outputLine += partFinal + "|";
+      lineVertical += std::string(partFinal.size(), '-') + "+";
+
+      ++i;
+    }
+
+    std::cout << lineVertical << "\n"
+              << outputLine << "\n"
+              << lineVertical << "\n";
+  }
+
+  while (diskManager->getLine(TMP_RESULT, line) != END) {
+    int i = 0;
+
+    std::string lineSize;
+    std::string outputLine;
+
+    diskManager->setPosition(TMP_SIZE_ATTRIBUTES, 0, SEEK_SET);
+
+    while (diskManager->getLine(TMP_SIZE_ATTRIBUTES, lineSize) != END) {
+      int size = std::stoi(searchInEsquema(lineSize, 1));
+
+      auto part = searchInEsquema(line, i);
+
+      if (i == 0) 
+        outputLine += "|";
+
+      auto partFinal = " " + part + std::string((size - part.size() + 3), ' ');
+      outputLine += partFinal + "|";
+
+      ++i;
+    }
+
+    std::cout << outputLine << "\n";
+  }
+
+  std::cout << lineVertical << "\n";
+}
+
 void Megatron::clearCache() {
   diskManager->deleteFile(TMP_SCHEMAS);
   diskManager->deleteFile(TMP_ATTRIBUTES);
   diskManager->deleteFile(TMP_LINES);
   diskManager->deleteFile(TMP_RESULT);
+  diskManager->deleteFile(TMP_SIZE_ATTRIBUTES);
 }
 
 void Megatron::init() {
@@ -266,7 +365,7 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
 
   clearCache();
 
-  diskManager->openFile(SCHEMA);
+  diskManager->openFile(SCHEMA, READ_FLAGS);
 
   if (!diskManager->isOpen(SCHEMA)) {
     return;
@@ -289,6 +388,8 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
   }
 
   recorrerCartesian(0, filePaths, TMP_RESULT);
+  
+  showResult();
 
   delete diskManager;
 }

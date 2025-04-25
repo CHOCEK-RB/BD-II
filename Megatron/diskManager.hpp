@@ -13,7 +13,7 @@ public:
   DiskManager(const std::string &);
   ~DiskManager();
 
-  int openFile(const std::string &);
+  int openFile(const std::string &, int);
   bool closeFile(const std::string &);
   bool isOpen(const std::string &);
 
