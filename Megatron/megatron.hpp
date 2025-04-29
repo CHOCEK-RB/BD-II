@@ -26,7 +26,7 @@ private:
 
   bool existTables(const std::vector<std::string> &, const std::string &);
   bool existAttributes(const std::vector<std::string> &,
-                       const std::vector<std::string> &, const std::string &);
+                       std::vector<std::string> &, const std::string &);
 
   short int positionAttribute(const std::string &, const std::string &);
 

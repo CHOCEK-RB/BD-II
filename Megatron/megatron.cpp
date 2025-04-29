@@ -14,7 +14,7 @@ bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
   std::string line;
 
   while (diskManager->getLine(file, line) != END) {
-    size_t pos = line.find('#');
+    int pos = line.find('#');
     if (pos != std::string::npos) {
       std::string _schema = line.substr(0, pos);
       if (_schema == schema && diskManager->writeFileLine(TMP_SCHEMAS, line)) {
@@ -115,12 +115,13 @@ void Megatron::recorrerCartesian(int nivel, std::vector<std::string> &files,
         if (!diskManager->replaceLine(TMP_SIZE_ATTRIBUTES, i, line))
           return;
       }
+      if (!outputLine.empty())
+        outputLine += "#";
 
-      outputLine += part + "#";
+      outputLine += part;
       ++i;
     }
 
-    outputLine.pop_back();
     diskManager->writeFileLine(tmp, outputLine);
     return;
   }
@@ -182,13 +183,24 @@ bool Megatron::existTables(const std::vector<std::string> &tables,
 }
 
 bool Megatron::existAttributes(const std::vector<std::string> &tables,
-                               const std::vector<std::string> &attributes,
+                               std::vector<std::string> &attributes,
                                const std::string &file) {
+  if (attributes.size() == 1 && attributes[0] == "*"){
+    attributes.clear(); 
+    for (auto table : tables){
+      std::string schema = getSchema(file, table);
+      auto newAttributes = utils::split(schema, '#');
+      for (size_t i = 1; i < newAttributes.size(); i+=2){
+        attributes.push_back(newAttributes[0] + "." + newAttributes[i]);
+      }
+    }
+  }
+
   for (size_t i = 0; i < attributes.size(); ++i) {
     const auto &attr = attributes[i];
     bool found = false;
 
-    size_t dotPos = attr.find('.');
+    int dotPos = attr.find('.');
     if (dotPos != std::string::npos) {
       std::string table = attr.substr(0, dotPos);
       std::string attribute = attr.substr(dotPos + 1);
@@ -313,6 +325,8 @@ void Megatron::clearCache() {
 }
 
 void Megatron::init() {
+  auto tmp = utils::shuntingYard("NOT (Country = 'Germany' AND NOT City = 'Berlin') OR Population > 1000000");
+
   std::cout << "% Megatron 3000\n\tWelcome to Megatron 3000!\n";
   switch (showMenu()) {
   case 1:
