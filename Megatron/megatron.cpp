@@ -10,15 +10,21 @@
 
 Megatron::~Megatron() { delete diskManager; }
 
-bool Megatron::loadSchema(const std::string &file, const std::string &schema) {
+bool Megatron::checkSchema(const std::string &file, const std::string &schema,
+                           bool load = true,
+                           const std::string &saveFile = TMP_SCHEMAS) {
   std::string line;
 
   while (diskManager->getLine(file, line) != END) {
     int pos = line.find('#');
     if (pos != std::string::npos) {
       std::string _schema = line.substr(0, pos);
-      if (_schema == schema && diskManager->writeFileLine(TMP_SCHEMAS, line)) {
+      if (_schema == schema) {
         diskManager->setPosition(file, 0, SEEK_SET);
+
+        if (load)
+          return diskManager->writeFileLine(saveFile, line);
+
         return true;
       }
     }
@@ -173,8 +179,71 @@ std::string Megatron::searchInEsquema(const std::string &line, short position) {
 bool Megatron::existTables(const std::vector<std::string> &tables,
                            const std::string &file) {
   for (const auto &table : tables) {
-    if (!loadSchema(file, table)) {
+    if (!checkSchema(file, table)) {
       std::cerr << "La tabla '" << table << "' no existe en esquemas.\n";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool Megatron::checkAttribute(const std::vector<std::string> &tables,
+                              const std::string &attr, const std::string &file,
+                              bool load = true,
+                              const std::string &saveFile = TMP_ATTRIBUTES) {
+
+  int dotPos = attr.find('.');
+  if (dotPos != std::string::npos) {
+    std::string table = attr.substr(0, dotPos);
+    std::string attribute = attr.substr(dotPos + 1);
+
+    auto it = std::find(tables.begin(), tables.end(), table);
+    if (it == tables.end()) {
+      std::cerr << "La tabla del atributo " << attr << " no se ha encontrado\n";
+      return false;
+    }
+
+    std::string schemaLine = getSchema(file, table);
+    short pos = positionAttribute(schemaLine, attribute);
+    if (pos == -1) {
+      std::cerr << "El atributo " << attr << " no se ha encontrado\n";
+      return false;
+    }
+
+    if (load && getSchema(saveFile, attr) == "") {
+      std::string type = searchInEsquema(schemaLine, (pos + 1) * 2);
+      return diskManager->writeFileLine(saveFile, attr + "#" + type + "#" +
+                                                      std::to_string(pos));
+    }
+
+    return true;
+
+  } else {
+    bool found = false;
+
+    for (size_t i = 0; i < tables.size(); ++i) {
+      std::string schemaLine = getSchema(file, tables[i]);
+      short pos = positionAttribute(schemaLine, attr);
+      if (pos != -1) {
+        if (found) {
+          std::cerr << "Especifique la tabla del atributo " << attr << "\n";
+          return false;
+        }
+
+        if (load && getSchema(saveFile, attr) == "") {
+          std::string type = searchInEsquema(schemaLine, (pos + 1) * 2);
+          diskManager->writeFileLine(saveFile, tables[i] + "." + attr + "#" +
+                                                   type + "#" +
+                                                   std::to_string(pos));
+        }
+
+        found = true;
+      }
+    }
+
+    if (!found) {
+      std::cerr << "No se a podido encontrar el atributo " << attr << "\n";
       return false;
     }
   }
@@ -185,68 +254,20 @@ bool Megatron::existTables(const std::vector<std::string> &tables,
 bool Megatron::existAttributes(const std::vector<std::string> &tables,
                                std::vector<std::string> &attributes,
                                const std::string &file) {
-  if (attributes.size() == 1 && attributes[0] == "*"){
-    attributes.clear(); 
-    for (auto table : tables){
+  if (attributes.size() == 1 && attributes[0] == "*") {
+    attributes.clear();
+    for (auto table : tables) {
       std::string schema = getSchema(file, table);
       auto newAttributes = utils::split(schema, '#');
-      for (size_t i = 1; i < newAttributes.size(); i+=2){
+      for (size_t i = 1; i < newAttributes.size(); i += 2) {
         attributes.push_back(newAttributes[0] + "." + newAttributes[i]);
       }
     }
   }
 
   for (size_t i = 0; i < attributes.size(); ++i) {
-    const auto &attr = attributes[i];
-    bool found = false;
-
-    int dotPos = attr.find('.');
-    if (dotPos != std::string::npos) {
-      std::string table = attr.substr(0, dotPos);
-      std::string attribute = attr.substr(dotPos + 1);
-
-      auto it = std::find(tables.begin(), tables.end(), table);
-      if (it == tables.end()) {
-        std::cerr << "La tabla del atributo " << attr
-                  << " no se ha encontrado\n";
-        return false;
-      }
-
-      std::string schemaLine = getSchema(file, table);
-      short pos = positionAttribute(schemaLine, attribute);
-      if (pos == -1) {
-        std::cerr << "El atributo " << attr << " no se ha encontrado\n";
-        return false;
-      }
-
-      std::string type = searchInEsquema(schemaLine, (pos + 1) * 2);
-
-      diskManager->writeFileLine(TMP_ATTRIBUTES,
-                                 attr + "#" + type + "#" + std::to_string(pos));
-
-    } else {
-      for (size_t j = 0; j < tables.size(); ++j) {
-        std::string schemaLine = getSchema(file, tables[j]);
-        short pos = positionAttribute(schemaLine, attr);
-        if (pos != -1) {
-          if (found) {
-            std::cerr << "Especifique la tabla del atributo " << attr << "\n";
-            return false;
-          }
-          std::string type = searchInEsquema(schemaLine, (pos + 1) * 2);
-
-          diskManager->writeFileLine(TMP_ATTRIBUTES,
-                                     tables[j] + "." + attributes[i] + "#" +
-                                         type + "#" + std::to_string(pos));
-
-          found = true;
-        }
-      }
-
-      if (!found) {
-        std::cerr << "El atributo " << attr << " no se ha encontrado\n";
-        return false;
-      }
+    if (!checkAttribute(tables, attributes[i], file)) {
+      return false;
     }
   }
 
@@ -301,7 +322,7 @@ void Megatron::showResult() {
 
       auto part = searchInEsquema(line, i);
 
-      if (i == 0) 
+      if (i == 0)
         outputLine += "|";
 
       auto partFinal = " " + part + std::string((size - part.size() + 3), ' ');
@@ -325,7 +346,8 @@ void Megatron::clearCache() {
 }
 
 void Megatron::init() {
-  auto tmp = utils::shuntingYard("NOT (Country = 'Germany' AND NOT City = 'Berlin') OR Population > 1000000");
+  auto tmp = utils::shuntingYard("NOT (Country = 'Germany' AND NOT City = "
+                                 "'Berlin') OR Population > 1000000");
 
   std::cout << "% Megatron 3000\n\tWelcome to Megatron 3000!\n";
   switch (showMenu()) {
@@ -402,7 +424,7 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
   }
 
   recorrerCartesian(0, filePaths, TMP_RESULT);
-  
+
   showResult();
 
   delete diskManager;

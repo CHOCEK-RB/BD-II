@@ -18,7 +18,8 @@ private:
 
   DiskManager *diskManager;
 
-  bool loadSchema(const std::string &, const std::string &);
+  bool checkSchema(const std::string &, const std::string &, bool, const std::string &);
+  bool checkAttribute(const std::vector<std::string> &, const std::string &, const std::string &, bool, const std::string &);
   bool loadSchemaFiles(std::vector<std::string> &);
   std::string getSchema(const std::string &, const std::string &);
 
@@ -31,7 +32,7 @@ private:
   short int positionAttribute(const std::string &, const std::string &);
 
   std::string searchInEsquema(const std::string &, short int);
-  
+
   void showResult();
 
   void clearCache();

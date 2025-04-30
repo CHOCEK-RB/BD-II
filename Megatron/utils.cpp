@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include <algorithm>
 #include <cstdio>
 #include <iostream>
 #include <sstream>
@@ -95,9 +96,8 @@ std::vector<std::string> utils::tokenize(const std::string &expr) {
     current += ch;
   }
 
-  if (!current.empty()) {
+  if (!current.empty())
     tokens.push_back(current);
-  }
 
   return tokens;
 }
@@ -105,7 +105,7 @@ std::vector<std::string> utils::tokenize(const std::string &expr) {
 std::vector<std::string> utils::shuntingYard(const std::string &expr) {
   std::vector<std::string> output;
   std::stack<std::string> operators;
-  
+
   auto tokens = tokenize(expr);
 
   for (const auto &token : tokens) {
@@ -151,4 +151,24 @@ std::vector<std::string> utils::shuntingYard(const std::string &expr) {
   }
 
   return output;
+}
+
+bool utils::isNumber(const std::string &string) {
+  if (string.empty())
+    return false;
+
+  size_t start = 0;
+
+  if (string[0] == '+' || string[0] == '-') {
+    if (string.size() == 1)
+      return false;
+    start = 1;
+  }
+
+  return std::all_of(string.begin() + start, string.end(), ::isdigit);
+}
+
+bool utils::isStr(const std::string &string) {
+  return !string.empty() && string[0] == '\'' &&
+         string[string.size() - 1] == '\'';
 }

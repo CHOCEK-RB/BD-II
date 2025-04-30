@@ -12,5 +12,8 @@ public:
   static std::vector<std::string> split(const std::string &, char);
   static std::vector<std::string> tokenize(const std::string &);
   static std::vector<std::string> shuntingYard(const std::string &);
+
+  static bool isNumber(const std::string &);
+  static bool isStr(const std::string &);
 };
 #endif
