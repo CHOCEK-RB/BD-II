@@ -17,7 +17,7 @@ Megatron::Megatron() {
   this->schemaManager = new SchemaManager(diskManager);
 }
 
-Megatron::~Megatron() { delete diskManager; }
+Megatron::~Megatron() { delete schemaManager; }
 
 short Megatron::positionAttribute(const std::string &line,
                                   const std::string &attribute) {
@@ -590,13 +590,11 @@ void Megatron::selectMenu() {
     pipeMenu(saveFile);
     break;
   case 3:
-    /*
     from = "titanic, barco";
     select = "PassengerId, barco.ID, titanic.Name, Sex, Price";
     conditions = "Sex=\'female\' AND (titanic.PassengerId > 10 OR "
                  "PassengerId=ID) AND Age <= 30";
     saveFile = "prueba";
-    */
     break;
   default:
     std::cout << "Opcion invalida.\n";
@@ -677,6 +675,4 @@ void Megatron::selectFuntion(const std::string &select, const std::string &from,
 
   if (recorrerCartesian(filePaths, svFile, !conditions.empty()))
     showResult(svFile);
-
-  delete diskManager;
 }

@@ -8,9 +8,10 @@
 class SchemaManager {
 public:
   SchemaManager(DiskManager *);
-  ~SchemaManager() = delete;
+  ~SchemaManager() {};
 
-  bool checkSchema(const std::string &file, const std::string &schema, bool load = true, const std::string &saveFile = TMP_SCHEMAS);
+  bool checkSchema(const std::string &file, const std::string &schema,
+                   bool load = true, const std::string &saveFile = TMP_SCHEMAS);
 
   std::string getSchema(const std::string &, const std::string &);
 
