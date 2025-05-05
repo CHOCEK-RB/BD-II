@@ -38,10 +38,13 @@ short Megatron::positionAttribute(const std::string &line,
 }
 
 bool Megatron::checkAttribute(const std::vector<std::string> &tables,
-                              const std::string &attr,
-                              const std::string &file,
+                              const std::string &attr, const std::string &file,
                               bool load = true,
                               const std::string &saveFile = TMP_ATTRIBUTES) {
+  if (load && !diskManager->isOpen(saveFile)) {
+    diskManager->openFile(saveFile, READ_WRITE_FLAGS);
+  }
+
   int dotPos = attr.find('.');
   if (dotPos != std::string::npos) {
     std::string table = attr.substr(0, dotPos);
@@ -63,8 +66,8 @@ bool Megatron::checkAttribute(const std::vector<std::string> &tables,
     if (load && schemaManager->getSchema(saveFile, attr) == "") {
       std::string type =
           schemaManager->searchInEsquema(schemaLine, (pos + 1) * 2);
-      return diskManager->writeFileLine(
-          saveFile, attr + "#" + type + "#" + std::to_string(pos));
+      return diskManager->writeFileLine(saveFile, attr + "#" + type + "#" +
+                                                      std::to_string(pos));
     }
 
     return true;
@@ -85,9 +88,9 @@ bool Megatron::checkAttribute(const std::vector<std::string> &tables,
                      schemaManager->getSchema(saveFile, attr) == "")) {
           std::string type =
               schemaManager->searchInEsquema(schemaLine, (pos + 1) * 2);
-          diskManager->writeFileLine(saveFile,
-                                     tables[i] + "." + attr + "#" + type + "#" +
-                                         std::to_string(pos));
+          diskManager->writeFileLine(saveFile, tables[i] + "." + attr + "#" +
+                                                   type + "#" +
+                                                   std::to_string(pos));
         }
 
         found = true;
@@ -193,8 +196,8 @@ bool Megatron::shuntingYard(const std::string &expr,
       }
     } else {
       if (!utils::isNumber(token) && !utils::isStr(token) &&
-          !checkAttribute(
-              tables, token, TMP_SCHEMAS, true, TMP_CONDITIONAL_ATTRIBUTES)) {
+          !checkAttribute(tables, token, TMP_SCHEMAS, true,
+                          TMP_CONDITIONAL_ATTRIBUTES)) {
         return false;
       }
       diskManager->writeFileLine(TMP_CONDITIONS, token);
@@ -269,9 +272,7 @@ bool Megatron::checkConditions() {
 
       result = !val;
 
-      if (!diskManager->replaceLines(TMP_COPY_CONDITIONS,
-                                     currentLine - 1,
-                                     2,
+      if (!diskManager->replaceLines(TMP_COPY_CONDITIONS, currentLine - 1, 2,
                                      result ? "true" : "false"))
         return false;
 
@@ -352,9 +353,7 @@ bool Megatron::checkConditions() {
       return false;
     }
 
-    if (!diskManager->replaceLines(TMP_COPY_CONDITIONS,
-                                   currentLine - 2,
-                                   3,
+    if (!diskManager->replaceLines(TMP_COPY_CONDITIONS, currentLine - 2, 3,
                                    result ? "true" : "false")) {
       return false;
     }
@@ -362,8 +361,7 @@ bool Megatron::checkConditions() {
 }
 
 bool Megatron::recorrerCartesian(std::vector<std::string> &files,
-                                 const std::string &saveFile,
-                                 bool conditions) {
+                                 const std::string &saveFile, bool conditions) {
   for (const std::string &file : files) {
     if (diskManager->isEmpty(file))
       return false;
@@ -592,11 +590,13 @@ void Megatron::selectMenu() {
     pipeMenu(saveFile);
     break;
   case 3:
+    /*
     from = "titanic, barco";
     select = "PassengerId, barco.ID, titanic.Name, Sex, Price";
     conditions = "Sex=\'female\' AND (titanic.PassengerId > 10 OR "
                  "PassengerId=ID) AND Age <= 30";
     saveFile = "prueba";
+    */
     break;
   default:
     std::cout << "Opcion invalida.\n";
@@ -641,8 +641,7 @@ void Megatron::pipeMenu(std::string &saveFile) {
   std::cout << "\n% Guardando en: " << saveFile << "\n";
 }
 
-void Megatron::selectFuntion(const std::string &select,
-                             const std::string &from,
+void Megatron::selectFuntion(const std::string &select, const std::string &from,
                              const std::string &conditions,
                              const std::string &saveFile) {
 
