@@ -1,52 +1,46 @@
 #ifndef MEGATRON_HPP
 #define MEGATRON_HPP
 
-#include "diskManager.hpp"
 #include <string>
 #include <vector>
 
-struct AttributeInfo {
-  std::string type;
-  size_t tableIndex;
-  size_t attributeIndex;
-  size_t position;
-};
+#include "diskManager.hpp"
+#include "schemaManager.hpp"
 
 class Megatron {
 private:
   long int size;
 
   DiskManager *diskManager;
+  SchemaManager *schemaManager;
+  std::string flag;
 
-  bool checkSchema(const std::string &, const std::string &, bool, const std::string &);
   bool checkAttribute(const std::vector<std::string> &, const std::string &, const std::string &, bool, const std::string &);
   bool loadSchemaFiles(std::vector<std::string> &);
-  std::string getSchema(const std::string &, const std::string &);
 
-  void recorrerCartesian(int, std::vector<std::string> &, const std::string &);
+  bool recorrerCartesian(std::vector<std::string> &, const std::string &, bool);
 
   bool existTables(const std::vector<std::string> &, const std::string &);
-  bool existAttributes(const std::vector<std::string> &,
-                       std::vector<std::string> &, const std::string &);
+  bool existAttributes(const std::vector<std::string> &, std::vector<std::string> &, const std::string &);
 
-  short int positionAttribute(const std::string &, const std::string &);
+  short positionAttribute(const std::string &, const std::string &);
 
-  std::string searchInEsquema(const std::string &, short int);
+  bool shuntingYard(const std::string &, const std::vector<std::string> &);
 
-  void showResult();
+  bool checkConditions();
+  void showResult(const std::string &file);
 
   void clearCache();
 
 public:
-  Megatron() : size(500 * 1024 * 1024), diskManager(nullptr) {};
+  Megatron();
   ~Megatron();
   void init();
   int showMenu();
   void selectMenu();
-  void whereMenu(const std::string &, const std::string &);
-  void saveMenu(const std::string &, const std::string &, const std::string[]);
-  void selectFuntion(const std::string &, const std::string &,
-                     const std::string[], bool);
+  void whereMenu(std::string &conditions, std::string &saveFile);
+  void pipeMenu(std::string &saveFile);
+  void selectFuntion(const std::string &select, const std::string &from, const std::string &conditions, const std::string &saveFile);
 };
 
 #endif

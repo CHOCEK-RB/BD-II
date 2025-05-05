@@ -1,15 +1,13 @@
 #include "utils.hpp"
 #include <algorithm>
 #include <cstdio>
-#include <iostream>
 #include <sstream>
-#include <stack>
 #include <string>
 #include <unordered_set>
 
 std::string utils::trim(const std::string &string) {
-  size_t start = string.find_first_not_of(" \t\n\r");
-  size_t end = string.find_last_not_of(" \t\n\r");
+  size_t start = string.find_first_not_of(" \t\n\r\'");
+  size_t end = string.find_last_not_of(" \t\n\r\'");
   return (start == std::string::npos) ? ""
                                       : string.substr(start, end - start + 1);
 }
@@ -26,13 +24,13 @@ std::vector<std::string> utils::split(const std::string &text, char delimiter) {
   return result;
 }
 
-bool isOperator(const std::string &token) {
+bool utils::isOperator(const std::string &token) {
   static const std::unordered_set<std::string> operators = {
       "AND", "OR", "NOT", "<=", ">=", "=", "<", ">"};
   return operators.find(token) != operators.end();
 }
 
-int getPrecedence(const std::string &op) {
+int utils::getPrecedence(const std::string &op) {
   if (op == "OR")
     return 1;
   if (op == "AND")
@@ -44,7 +42,7 @@ int getPrecedence(const std::string &op) {
   return 0;
 }
 
-bool isLeftAssociative(const std::string &op) { return op != "NOT"; }
+bool utils::isLeftAssociative(const std::string &op) { return op != "NOT"; }
 
 std::vector<std::string> utils::tokenize(const std::string &expr) {
   std::vector<std::string> tokens;
@@ -102,57 +100,6 @@ std::vector<std::string> utils::tokenize(const std::string &expr) {
   return tokens;
 }
 
-std::vector<std::string> utils::shuntingYard(const std::string &expr) {
-  std::vector<std::string> output;
-  std::stack<std::string> operators;
-
-  auto tokens = tokenize(expr);
-
-  for (const auto &token : tokens) {
-    if (isOperator(token)) {
-      while (!operators.empty() && isOperator(operators.top())) {
-        const auto &top = operators.top();
-        if ((isLeftAssociative(token) &&
-             getPrecedence(token) <= getPrecedence(top)) ||
-            (!isLeftAssociative(token) &&
-             getPrecedence(token) < getPrecedence(top))) {
-          output.push_back(top);
-          operators.pop();
-        } else {
-          break;
-        }
-      }
-      operators.push(token);
-    } else if (token == "(") {
-      operators.push(token);
-    } else if (token == ")") {
-      while (!operators.empty() && operators.top() != "(") {
-        output.push_back(operators.top());
-        operators.pop();
-      }
-      if (!operators.empty() && operators.top() == "(") {
-        operators.pop();
-      } else {
-        std::cerr << "Error: paréntesis desbalanceados.\n";
-      }
-    } else {
-      output.push_back(token);
-    }
-  }
-
-  while (!operators.empty()) {
-    if (operators.top() == "(" || operators.top() == ")") {
-      std::cerr << "Error: paréntesis desbalanceados.\n";
-      operators.pop();
-    } else {
-      output.push_back(operators.top());
-      operators.pop();
-    }
-  }
-
-  return output;
-}
-
 bool utils::isNumber(const std::string &string) {
   if (string.empty())
     return false;
@@ -171,4 +118,55 @@ bool utils::isNumber(const std::string &string) {
 bool utils::isStr(const std::string &string) {
   return !string.empty() && string[0] == '\'' &&
          string[string.size() - 1] == '\'';
+}
+
+bool utils::isFloat(const std::string &string) {
+  if (string.empty())
+    return false;
+
+  if (string[0] == '+' || string[0] == '-') {
+    if (string.size() == 1)
+      return false;
+  }
+  char *endptr = nullptr;
+  std::strtod(string.c_str(), &endptr);
+  return endptr == string.c_str() + string.size();
+}
+
+bool utils::isBool(const std::string &string) {
+  return string == "true" || string == "false";
+}
+
+bool utils::convertAndVerify(const std::string &op,
+                             const std::string &parameterA,
+                             const std::string &parameterB,
+                             const std::string &type) {
+  if (parameterA.empty() || parameterB.empty())
+    return false;
+
+  if (type == "str") {
+    std::string a = trim(parameterA);
+    std::string b = trim(parameterB);
+    return verifyCondition(op, a, b);
+  }
+
+  if (type == "int" && isNumber(parameterA) && isNumber(parameterB)) {
+    int a = std::stoi(parameterA);
+    int b = std::stoi(parameterB);
+    return verifyCondition(op, a, b);
+  }
+
+  if (type == "float" && isFloat(parameterA) && isFloat(parameterB)) {
+    float a = std::stof(parameterA);
+    float b = std::stof(parameterB);
+    return verifyCondition(op, a, b);
+  }
+
+  if (type == "bool" && isBool(parameterA) && isBool(parameterB)) {
+    bool a = parameterA == "true";
+    bool b = parameterB == "true";
+    return verifyCondition(op, a, b);
+  }
+
+  return false;
 }

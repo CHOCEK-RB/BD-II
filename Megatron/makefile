@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -g -std=c++17
 
-SRCS = main.cpp megatron.cpp diskManager.cpp utils.cpp const.cpp
+SRCS = main.cpp megatron.cpp diskManager.cpp schemaManager.cpp utils.cpp const.cpp
 OBJS = $(SRCS:.cpp=.o)
 TARGET = main
 all: $(TARGET)
