@@ -13,7 +13,7 @@ constexpr off_t END = -1;
 constexpr size_t BUFFER_SIZE = 1024;
 constexpr int NOT_OPEN = -1;
 
-constexpr char PATH[] = "/home/CHOCEK/tmp/megatron/db/";
+constexpr char PATH[] = "~/tmp/megatron/db/";
 constexpr char SCHEMA[] = "esquema.txt";
 constexpr char TMP_SCHEMAS[] = ".schema_tmp.txt";
 constexpr char TMP_ATTRIBUTES[] = ".attributes_tmp.txt";
