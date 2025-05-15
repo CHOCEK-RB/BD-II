@@ -595,21 +595,15 @@ void readRegistersTsv(const int &fdTSV,
 
           findAndMove(relations, '#');
           findAndMove(relations, '#');
-          findAndMove(relations, '#');
 
           state = checkState(relations);
           break;
         } else if (ch == '\n') {
-
-          if (findAndMove(relations, '#') == -1)
-              return;
-
-          findAndMove(relations, '#');
-
           ch = '\n';
           write(fdTXT, &ch, 1);
 
           lseek(relations, 0, SEEK_SET);
+          
           findAndMove(relations, '#');
           findAndMove(relations, '#');
           break;
@@ -624,20 +618,16 @@ void readRegistersTsv(const int &fdTSV,
         }
 
         if (!inQuotes && (ch == ',' || ch == '\n')) {
-          comparateTypes(relations, IS_VARCHAR, lengthAttribute);
-          char sep = (ch == ',') ? '#' : '\n';
-          write(fdTXT, &sep, 1);
+          comparateTypes(relations, state, lengthAttribute);
+          ch = (ch == ',') ? '#' : '\n';
+          write(fdTXT, &ch, 1);
           if (ch == '\n') {
             lseek(relations, 0, SEEK_SET);
             findAndMove(relations, '#');
             findAndMove(relations, '#');
+
           } else {
-            if (findAndMove(relations, '#') == -1) {
-              write(fdTXT, "\n", 1);
-              lseek(relations, 0, SEEK_SET);
-              findAndMove(relations, '#');
-              findAndMove(relations, '#');
-            }
+            findAndMove(relations, '#');
             findAndMove(relations, '#');
           }
           state = checkState(relations);
