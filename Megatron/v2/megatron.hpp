@@ -1,7 +1,7 @@
 #ifndef MEGATRON_HPP
 #define MEGATRON_HPP
 
-enum State {START, IS_INT, IS_FLOAT, IS_VARCHAR, UNKNOWN};
+enum State { START, IS_INT, IS_FLOAT, IS_VARCHAR, UNKNOWN };
 
 // Utils
 int openFile(const char *fileName, int flags, bool registrar = false, int saveFd = -1);
@@ -24,12 +24,12 @@ int prevFd(int saveFd);
 // Read TSV
 int openTSV(const int &input, const int &saveFd);
 int openTxtFromTsv(const int &saveFd);
-void createSchemaTSV(const int &fdTSV, const int &saveFd);
-void readRegistersTsv(const int &fdTSV, const int &fdTXT);
+void createSchemaTSV(const int &fdTSV, const int &saveFd, const int &fdSchema);
+void comparateTypes(const int &relations, State state, int &lengthAttribute);
+void readRegistersTsv(const int &fdTSV, const int &fdTXT, const int &relations);
 bool readTsv(const int &fd, const int &saveFd);
 
-// SELECT 
-
+// SELECT
 
 void insertRegisters();
 void selectMenu();

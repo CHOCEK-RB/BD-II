@@ -331,7 +331,7 @@ int openTSV(const int &input, const int &saveFd) {
 
   fileTSV[sizeTSV] = '\0';
 
-  if (fileTSV[sizeTSV - 4] != '.' || fileTSV[sizeTSV - 3] != 't' ||
+  if (fileTSV[sizeTSV - 4] != '.' || fileTSV[sizeTSV - 3] != 'c' ||
       fileTSV[sizeTSV - 2] != 's' || fileTSV[sizeTSV - 1] != 'v') {
     std::cerr << "No se ingreso un archivo tsv";
     return -1;
@@ -360,6 +360,7 @@ int openTxtFromTsv(const int &saveFd) {
 
   fileName[sizeFile] = '\0';
 
+  fileName[sizeFile - 3] = 't';
   fileName[sizeFile - 2] = 'x';
   fileName[sizeFile - 1] = 't';
 
@@ -402,11 +403,10 @@ bool openRelationFiles(const int &relations, const int &saveFd) {
   return true;
 }
 
-void createSchemaTSV(const int &fdTSV, const int &saveFd) {
+void createSchemaTSV(const int &fdTSV, const int &saveFd, const int &fdSchema) {
   searchFd(saveFd, fdTSV);
   findAndMove(saveFd, '=');
 
-  int fdSchema = openFile(SCHEMA, READ_WRITE_FLAGS);
   char ch;
   while (read(saveFd, &ch, 1) == 1 && ch != '.') {
     write(fdSchema, &ch, 1);
@@ -415,18 +415,34 @@ void createSchemaTSV(const int &fdTSV, const int &saveFd) {
   ch = '#';
   write(fdSchema, &ch, 1);
   int parenth = 0;
-  while (read(fdTSV, &ch, 1) == 1 && ch != '\n') {
+  while (read(fdTSV, &ch, 1) == 1) {
     if (ch == '\r') {
       continue;
     }
 
     if (ch == ',') {
+      ch = '#';
+      write(fdSchema, &ch, 1);
+
       for (int i = 0; i < BYTES_FOR_ATTRIBUTES; ++i) {
         ch = '\0';
         write(fdSchema, &ch, 1);
       }
+
       ch = '#';
       write(fdSchema, &ch, 1);
+    } else if (ch == '\n') {
+      ch = '#';
+      write(fdSchema, &ch, 1);
+
+      for (int i = 0; i < BYTES_FOR_ATTRIBUTES; ++i) {
+        ch = '\0';
+        write(fdSchema, &ch, 1);
+      }
+
+      ch = '\n';
+      write(fdSchema, &ch, 1);
+      return;
     } else {
       write(fdSchema, &ch, 1);
     }
@@ -461,6 +477,9 @@ State checkState(const int &relations) {
 
 void comparateTypes(const int &relations, State state, int &lengthAttribute) {
 
+  if (state == START)
+    return;
+
   int startPos = lseek(relations, 0, SEEK_CUR);
   bool changeType = checkState(relations) != state;
   if (checkState(relations) == START || changeType) {
@@ -473,7 +492,7 @@ void comparateTypes(const int &relations, State state, int &lengthAttribute) {
       while (read(relations, &ch, 0) == 1 && isdigit(ch))
         lenght = lenght * 10 + (ch - '0');
 
-      if (lenght < lengthAttribute)
+      if (lenght > lengthAttribute)
         lengthAttribute = lenght;
 
       lseek(relations, startPos, SEEK_SET);
@@ -494,13 +513,6 @@ void comparateTypes(const int &relations, State state, int &lengthAttribute) {
       write(relations, &ch, 1);
       ch = 'R';
       write(relations, &ch, 1);
-    } else if (state == IS_INT) {
-      ch = 'I';
-      write(relations, &ch, 1);
-      ch = 'N';
-      write(relations, &ch, 1);
-      ch = 'T';
-      write(relations, &ch, 1);
     } else if (state == IS_FLOAT) {
       ch = 'F';
       write(relations, &ch, 1);
@@ -512,6 +524,13 @@ void comparateTypes(const int &relations, State state, int &lengthAttribute) {
       write(relations, &ch, 1);
       ch = 'T';
       write(relations, &ch, 1);
+    } else if (state == IS_INT) {
+      ch = 'I';
+      write(relations, &ch, 1);
+      ch = 'N';
+      write(relations, &ch, 1);
+      ch = 'T';
+      write(relations, &ch, 1);
     } else {
       return;
     }
@@ -519,7 +538,7 @@ void comparateTypes(const int &relations, State state, int &lengthAttribute) {
     ch = '(';
     write(relations, &ch, 1);
     writeInt(relations, lengthAttribute);
-    ch = '(';
+    ch = ')';
     write(relations, &ch, 1);
 
     if (changeType) {
@@ -562,119 +581,150 @@ void readRegistersTsv(const int &fdTSV,
   findAndMove(relations, '#');
 
   char ch;
-  while (true) {
-    State state = checkState(relations);
-    if (state == UNKNOWN)
-      return;
+  State state = START;
+  int lengthAttribute = 0;
+  bool inQuotes = false;
+  bool floatPointUsed = false;
 
-    int lengthAttribute = 0;
-    bool inQuotes = false;
-
-    while (read(fdTSV, &ch, 1) == 1) {
-      if (ch == '\r')
+  while (read(fdTSV, &ch, 1) == 1) {
+    if (ch == '\r')
+      continue;
+  
+    std::cout << ch;
+    switch (state) {
+    case START:
+      if (ch == '\"') {
+        inQuotes = true;
+        state = IS_VARCHAR;
         continue;
+      } else if (isalpha(ch) || isspace(ch)) {
+        state = IS_VARCHAR;
+        write(fdTXT, &ch, 1);
+      } else if (isdigit(ch)) {
+        state = IS_INT;
+        write(fdTXT, &ch, 1);
+      } else if (ch == '-') {
+        state = IS_INT;
+        write(fdTXT, &ch, 1);
+      } else if (ch == ',') {
+        comparateTypes(relations, state, lengthAttribute);
+        write(fdTXT, "#", 1);
 
-      switch (state) {
-      case START:
-        if (ch == '\"') {
-          inQuotes = true;
-          state = IS_VARCHAR;
-          continue;
+        findAndMove(relations, '#');
+        findAndMove(relations, '#');
+        state = START;
+      } else if (ch == '\n') {
+        comparateTypes(relations, state, lengthAttribute);
+        write(fdTXT, "\n", 1);
 
-        } else if (isalpha(ch) || isspace(ch)) {
-          write(fdTXT, &ch, 1);
-          state = IS_VARCHAR;
+        lseek(relations, 0, SEEK_SET);
+        findAndMove(relations, '#');
+        findAndMove(relations, '#');
+        state = START;
+      } else {
 
-        } else if (isdigit(ch) || ch == '-') {
-          write(fdTXT, &ch, 1);
-          state = IS_INT;
+        state = IS_VARCHAR;
+        write(fdTXT, &ch, 1);
+      }
+      ++lengthAttribute;
+      continue;
 
-        } else if (ch == ',') {
-          ch = '#';
-          write(fdTXT, &ch, 1);
+    case IS_VARCHAR:
+      if (ch == '\"') {
 
-          findAndMove(relations, '#');
-          findAndMove(relations, '#');
+        if (read(fdTSV, &ch, 1) == 1) {
+          if (ch == ',' || ch == '\n') {
+            inQuotes = false;
+            comparateTypes(relations, state, lengthAttribute);
+            ch = (ch == ',') ? '#' : '\n';
+            write(fdTXT, &ch, 1);
 
-          state = checkState(relations);
-          break;
-        } else if (ch == '\n') {
-          ch = '\n';
-          write(fdTXT, &ch, 1);
+            if (ch == '\n') {
+              lseek(relations, 0, SEEK_SET);
+            }
 
-          lseek(relations, 0, SEEK_SET);
-          
-          findAndMove(relations, '#');
-          findAndMove(relations, '#');
-          break;
-        }
-        ++lengthAttribute;
-        break;
-
-      case IS_VARCHAR:
-        if (ch == '\"' && inQuotes) {
-          inQuotes = false;
-          continue;
-        }
-
-        if (!inQuotes && (ch == ',' || ch == '\n')) {
-          comparateTypes(relations, state, lengthAttribute);
-          ch = (ch == ',') ? '#' : '\n';
-          write(fdTXT, &ch, 1);
-          if (ch == '\n') {
-            lseek(relations, 0, SEEK_SET);
             findAndMove(relations, '#');
             findAndMove(relations, '#');
 
+            state = START;
+            lengthAttribute = 0;
+            floatPointUsed = false;
           } else {
-            findAndMove(relations, '#');
-            findAndMove(relations, '#');
+            write(fdTXT, &ch, 1);
+            ++lengthAttribute;
           }
-          state = checkState(relations);
-          lengthAttribute = 0;
-          break;
+        } else {
+          continue;
         }
-
+      } else {
         write(fdTXT, &ch, 1);
         ++lengthAttribute;
-        break;
-
-      case IS_INT:
-      case IS_FLOAT:
-        if (isdigit(ch) || ch == '.' || ch == '-') {
-          if (ch == '.' && state == IS_INT) {
-            state = IS_FLOAT;
-          }
-          write(fdTXT, &ch, 1);
-          ++lengthAttribute;
-        } else if (ch == ',' || ch == '\n') {
-          comparateTypes(relations, state, lengthAttribute);
-          char sep = (ch == ',') ? '#' : '\n';
-          write(fdTXT, &sep, 1);
-          if (ch == '\n') {
-            lseek(relations, 0, SEEK_SET);
-            findAndMove(relations, '#');
-            findAndMove(relations, '#');
-          } else {
-            if (findAndMove(relations, '#') == -1) {
-              write(fdTXT, "\n", 1);
-              lseek(relations, 0, SEEK_SET);
-              findAndMove(relations, '#');
-              findAndMove(relations, '#');
-            }
-            findAndMove(relations, '#');
-          }
-          state = checkState(relations);
-          lengthAttribute = 0;
-        }
-        break;
-
-      default:
-        break;
       }
+      continue;
+
+    case IS_INT:
+      if (isdigit(ch)) {
+        write(fdTXT, &ch, 1);
+        ++lengthAttribute;
+      } else if (ch == '.' && !floatPointUsed) {
+        state = IS_FLOAT;
+        floatPointUsed = true;
+        write(fdTXT, &ch, 1);
+        ++lengthAttribute;
+      } else if (ch == ',' || ch == '\n') {
+        comparateTypes(relations, state, lengthAttribute);
+        ch = (ch == ',') ? '#' : '\n';
+        write(fdTXT, &ch, 1);
+
+        if (ch == '\n') {
+          lseek(relations, 0, SEEK_SET);
+        }
+
+        findAndMove(relations, '#');
+        findAndMove(relations, '#');
+
+        state = START;
+        lengthAttribute = 0;
+        floatPointUsed = false;
+      } else {
+
+        state = IS_VARCHAR;
+        write(fdTXT, &ch, 1);
+        ++lengthAttribute;
+      }
+      continue;
+
+    case IS_FLOAT:
+      if (isdigit(ch)) {
+        write(fdTXT, &ch, 1);
+        ++lengthAttribute;
+      } else if (ch == ',' || ch == '\n') {
+        comparateTypes(relations, state, lengthAttribute);
+        ch = (ch == ',') ? '#' : '\n';
+        write(fdTXT, &ch, 1);
+
+        if (ch == '\n') {
+          lseek(relations, 0, SEEK_SET);
+        }
+
+        findAndMove(relations, '#');
+        findAndMove(relations, '#');
+
+        state = START;
+        lengthAttribute = 0;
+        floatPointUsed = false;
+      } else {
+
+        state = IS_VARCHAR;
+        write(fdTXT, &ch, 1);
+        ++lengthAttribute;
+      }
+      continue;
+
+    default:
+      continue;
     }
 
-    // Fin de archivo TSV
     if (lseek(fdTSV, 0, SEEK_CUR) == lseek(fdTSV, 0, SEEK_END))
       break;
   }
@@ -682,7 +732,7 @@ void readRegistersTsv(const int &fdTSV,
 
 bool readTsv(const int &input, const int &saveFd) {
   int fdTSV = openTSV(input, saveFd);
-
+  int fdSchema = openFile(SCHEMA, READ_WRITE_TRUNC_FLAGS);
   if (fdTSV == -1) {
     return false;
   }
@@ -693,9 +743,9 @@ bool readTsv(const int &input, const int &saveFd) {
 
   int fdTXT = openTxtFromTsv(saveFd);
 
-  createSchemaTSV(fdTSV, saveFd);
+  createSchemaTSV(fdTSV, saveFd, fdSchema);
 
-  readRegistersTsv(fdTSV, fdTXT);
+  readRegistersTsv(fdTSV, fdTXT, fdSchema);
 
   close(fdTSV);
   close(fdTXT);
