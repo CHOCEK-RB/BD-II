@@ -13,3 +13,4 @@ constexpr char FROM_TMP[] = ".from_tmp.txt";
 constexpr int NOT_OPEN = -1;
 constexpr int READ_WRITE_TRUNC_FLAGS = (O_RDWR | O_CREAT | O_TRUNC);
 constexpr int READ_WRITE_FLAGS = (O_RDWR | O_CREAT);
+constexpr int BYTES_FOR_ATTRIBUTES = 15;
