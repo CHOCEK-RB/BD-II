@@ -7,8 +7,11 @@ constexpr char INPUT_TMP[] = ".input_tmp.txt";
 constexpr char RELATIONS_TMP[] = ".relations_tmp.txt";
 constexpr char ATTRIBUTES_TMP[] = ".attributes_tmp.txt";
 
+constexpr char ATTRIBUTES_WHERE_TMP[] = ".relations_tmp.txt";
+
 constexpr char SELECT_TMP[] = ".select_tmp.txt";
 constexpr char FROM_TMP[] = ".from_tmp.txt";
+constexpr char WHERE_TMP[] = ".attributes_tmp.txt";
 
 constexpr char LINES_TMP[] = ".lines_tmp.txt";
 constexpr char RESULT_TMP[] = ".result_tmp.txt";

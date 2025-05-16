@@ -8,6 +8,171 @@
 #include <iostream>
 #include <unistd.h>
 
+void showResult(int attributesTmpFd, int resultTmpFd) {
+
+  lseek(attributesTmpFd, 0, SEEK_SET);
+  char ch;
+  while (true) {
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '(')
+      ;
+
+    int width = 0;
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != ')') {
+      width = width * 10 + (ch - '0');
+    }
+
+    std::cout << "+";
+    for (int i = 0; i < width + 2; i++)
+      std::cout << "-";
+
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '\n')
+      ;
+    if (read(attributesTmpFd, &ch, 1) != 1)
+      break;
+
+    lseek(attributesTmpFd, -1, SEEK_CUR);
+  }
+  std::cout << "+\n";
+
+  lseek(attributesTmpFd, 0, SEEK_SET);
+  std::cout << "|";
+
+  while (true) {
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '.')
+      ;
+
+    std::cout << " ";
+
+    int len = 0;
+    off_t attrNameStart = lseek(attributesTmpFd, 0, SEEK_CUR);
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '#') {
+      std::cout << ch;
+      len++;
+    }
+
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '(')
+      ;
+
+    int width = 0;
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != ')') {
+      width = width * 10 + (ch - '0');
+    }
+
+    for (int i = 0; i < (width - len + 1); i++) {
+      std::cout << " ";
+    }
+    std::cout << "|";
+
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '\n')
+      ;
+
+    if (read(attributesTmpFd, &ch, 1) != 1)
+      break;
+    lseek(attributesTmpFd, -1, SEEK_CUR);
+  }
+  std::cout << "\n";
+
+  lseek(attributesTmpFd, 0, SEEK_SET);
+  while (true) {
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '(')
+      ;
+
+    int width = 0;
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != ')') {
+      width = width * 10 + (ch - '0');
+    }
+
+    std::cout << "+";
+    for (int i = 0; i < width + 2; i++)
+      std::cout << "-";
+
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '\n')
+      ;
+    if (read(attributesTmpFd, &ch, 1) != 1)
+      break;
+
+    lseek(attributesTmpFd, -1, SEEK_CUR);
+  }
+  std::cout << "+\n";
+
+  lseek(resultTmpFd, 0, SEEK_SET);
+  lseek(attributesTmpFd, 0, SEEK_SET);
+  printf("|");
+
+  while (true) {
+
+    std::cout << " ";
+    int len = 0;
+
+    while (read(resultTmpFd,  &ch, 1) == 1 && ch != '\n' && ch != '#') {
+      std::cout << ch;
+      len++;
+    }
+
+    bool endl = ch == '\n' ? true : false;
+
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '(')
+      ;
+
+    int width = 0;
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != ')') {
+      width = width * 10 + (ch - '0');
+    }
+
+    for (int j = 0; j < (width - len + 1); j++) {
+      std::cout << " ";
+    }
+
+    std::cout << "|";
+
+    if (endl) {
+      std::cout << "\n";
+      std::cout << "|";
+      lseek(attributesTmpFd, 0, SEEK_SET);
+    }
+
+    if (read(resultTmpFd, &ch, 1) != 1)
+      break;
+    else{
+      lseek(resultTmpFd, -1, SEEK_CUR);
+      continue;
+    }
+
+    if (endl) {
+      std::cout << "\n";
+      std::cout << "|";
+      lseek(attributesTmpFd, 0, SEEK_SET);
+    } else {
+      lseek(resultTmpFd, -1, SEEK_CUR);
+    }
+  }
+
+  lseek(attributesTmpFd, 0, SEEK_SET);
+  while (true) {
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '(')
+      ;
+
+    int width = 0;
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != ')') {
+      width = width * 10 + (ch - '0');
+    }
+
+    std::cout << "+";
+    for (int i = 0; i < width + 2; i++)
+      std::cout << "-";
+
+    while (read(attributesTmpFd, &ch, 1) == 1 && ch != '\n')
+      ;
+    if (read(attributesTmpFd, &ch, 1) != 1)
+      break;
+
+    lseek(attributesTmpFd, -1, SEEK_CUR);
+  }
+  std::cout << "+\n";
+
+  std::cout << "Tamaño del archivo : " << lseek(resultTmpFd, 0, SEEK_END) << "  bytes\n";
+}
+
 bool openRelationFiles(const int &relations, const int &saveFd) {
   lseek(relations, 0, SEEK_SET);
 
@@ -303,12 +468,12 @@ void addAllAttributes(const int &relationsTmp, const int &attributesTmp) {
 
 bool isAsterisk(const int &relationsTmp) {
   char ch1, ch2;
-  if (read(relationsTmp, &ch1, 1) != 1 || ch1 != '*'){
+  if (read(relationsTmp, &ch1, 1) != 1 || ch1 != '*') {
     lseek(relationsTmp, 0, SEEK_SET);
     return false;
   }
 
-  if (read(relationsTmp, &ch2, 1) != 1 || ch2 != '\n'){
+  if (read(relationsTmp, &ch2, 1) != 1 || ch2 != '\n') {
     lseek(relationsTmp, 0, SEEK_SET);
     return false;
   }
@@ -373,12 +538,11 @@ void insertRegisters() {
   close(input);
 }
 
-
 void cartesianProduct(int saveFd,
                       int attributesTmpFd,
                       int relationsTmpFd,
                       int linesTmpFd,
-                      int resultTmpFd) {
+                      int resultTmpFd, bool conditions, int conditionsTmp) {
   int nivel = 0;
 
   lseek(saveFd, 0, SEEK_SET);
@@ -388,7 +552,8 @@ void cartesianProduct(int saveFd,
   {
     char ch;
     while (read(saveFd, &ch, 1) == 1) {
-      if (ch == '\n') cantidadRelaciones++;
+      if (ch == '\n')
+        cantidadRelaciones++;
     }
     lseek(saveFd, 0, SEEK_SET);
   }
@@ -400,7 +565,8 @@ void cartesianProduct(int saveFd,
       int totalAtributos = 0;
       char ch;
       while (read(attributesTmpFd, &ch, 1) == 1) {
-        if (ch == '\n') totalAtributos++;
+        if (ch == '\n')
+          totalAtributos++;
       }
       lseek(attributesTmpFd, 0, SEEK_SET);
 
@@ -419,21 +585,25 @@ void cartesianProduct(int saveFd,
         off_t lineStart = lseek(linesTmpFd, 0, SEEK_CUR);
 
         while (true) {
-          if (read(attributesTmpFd, &chAttributes, 1) != 1) break;
-          if (read(linesTmpFd, &chLine, 1) != 1) return;
+          if (read(attributesTmpFd, &chAttributes, 1) != 1)
+            break;
+          if (read(linesTmpFd, &chLine, 1) != 1)
+            return;
 
           if (chAttributes == '.' && chLine == '#') {
             findAndMove(attributesTmpFd, '#', 2);
 
             int colPos = 0;
-            while (read(attributesTmpFd, &chAttributes, 1) == 1 && isdigit(chAttributes)) {
+            while (read(attributesTmpFd, &chAttributes, 1) == 1 &&
+                   isdigit(chAttributes)) {
               colPos = colPos * 10 + (chAttributes - '0');
             }
 
             lseek(linesTmpFd, lineStart, SEEK_SET);
             findAndMove(linesTmpFd, '#', colPos + 1);
 
-            while (read(linesTmpFd, &chLine, 1) == 1 && chLine != '\n' && chLine != '#') {
+            while (read(linesTmpFd, &chLine, 1) == 1 && chLine != '\n' &&
+                   chLine != '#') {
               write(resultTmpFd, &chLine, 1);
             }
 
@@ -459,11 +629,13 @@ void cartesianProduct(int saveFd,
       write(resultTmpFd, &nl, 1);
 
       nivel--;
-      if (nivel < 0) break;
+      if (nivel < 0)
+        break;
 
       removeLastLine(linesTmpFd);
       int fdAnterior = prevFd(saveFd);
-      if (fdAnterior == -1) continue;
+      if (fdAnterior == -1)
+        continue;
 
       lseek(fdAnterior, 0, SEEK_SET);
       continue;
@@ -473,7 +645,7 @@ void cartesianProduct(int saveFd,
 
     char ch;
     bool hasLine = false;
-  
+
     while (read(saveFd, &ch, 1) == 1 && ch != '.') {
       write(linesTmpFd, &ch, 1);
     }
@@ -484,7 +656,8 @@ void cartesianProduct(int saveFd,
     while (read(fdActual, &ch, 1) == 1) {
       hasLine = true;
       write(linesTmpFd, &ch, 1);
-      if (ch == '\n') break;
+      if (ch == '\n')
+        break;
     }
 
     if (hasLine) {
@@ -492,17 +665,18 @@ void cartesianProduct(int saveFd,
     } else {
       // No hay más líneas: retroceder de nivel
       nivel--;
-      if (nivel < 0) break;
+      if (nivel < 0)
+        break;
       removeLastLine(linesTmpFd);
 
       int fdAnterior = prevFd(saveFd);
-      if (fdAnterior == -1) break;
+      if (fdAnterior == -1)
+        break;
 
       lseek(fdAnterior, 0, SEEK_SET);
     }
   }
 }
-
 
 void selectMenu() {
   std::cin.ignore();
@@ -544,12 +718,13 @@ void selectMenu() {
     std::cerr << "Error al buscar los registros de las relaciones\n";
     return;
   }
-  
+
   int linesTmp = openFile(LINES_TMP, READ_WRITE_TRUNC_FLAGS);
   int resultTmp = openFile(RESULT_TMP, READ_WRITE_TRUNC_FLAGS);
 
-  cartesianProduct(saveFd, attributesTmp, relations, linesTmp, resultTmp);
+  cartesianProduct(saveFd, attributesTmp, relations, linesTmp, resultTmp, false, -1);
 
+  showResult(attributesTmp, resultTmp);
   close(saveFd);
 
   close(input);

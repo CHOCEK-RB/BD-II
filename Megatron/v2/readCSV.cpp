@@ -2,7 +2,6 @@
 #include "const.cpp"
 #include "readCSV.hpp"
 
-#include <cstdlib>
 #include <fcntl.h>
 #include <iostream>
 #include <unistd.h>
@@ -67,7 +66,7 @@ void createSchemaTSV(const int &fdTSV, const int &saveFd, const int &fdSchema) {
   searchFd(saveFd, fdTSV);
   findAndMove(saveFd, '=');
   
-  findAndMove(fdSchema, '\n');
+  lseek(fdSchema, 0, SEEK_END);
   int startPos = lseek(fdSchema, 0, SEEK_CUR);
 
   char ch;
@@ -184,7 +183,7 @@ void comparateTypes(const int &relations, State state, int &lengthAttribute) {
 
     } else if (state == IS_FLOAT) {
 
-      write(relations, "VARCHAR", 5);
+      write(relations, "FLOAT", 5);
     } else if (state == IS_INT) {
 
       write(relations, "INT", 3);
@@ -241,6 +240,15 @@ void readRegistersTsv(const int &fdTSV,
   while (read(fdTSV, &ch, 1) == 1) {
     if (ch == '\r')
       continue;
+
+    if (state == START && ch == '\n'){
+      write(fdTXT, &ch, 1);
+      
+      lseek(relations, startPos, SEEK_SET);
+      findAndMove(relations, '#');
+      findAndMove(relations, '#');
+      continue;
+    }
 
     switch (state) {
     case START:
