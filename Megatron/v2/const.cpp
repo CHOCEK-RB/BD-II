@@ -10,6 +10,9 @@ constexpr char ATTRIBUTES_TMP[] = ".attributes_tmp.txt";
 constexpr char SELECT_TMP[] = ".select_tmp.txt";
 constexpr char FROM_TMP[] = ".from_tmp.txt";
 
+constexpr char LINES_TMP[] = ".lines_tmp.txt";
+constexpr char RESULT_TMP[] = ".result_tmp.txt";
+
 constexpr int NOT_OPEN = -1;
 constexpr int READ_WRITE_TRUNC_FLAGS = (O_RDWR | O_CREAT | O_TRUNC);
 constexpr int READ_WRITE_FLAGS = (O_RDWR | O_CREAT);

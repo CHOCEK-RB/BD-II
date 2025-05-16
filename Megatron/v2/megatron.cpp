@@ -1,372 +1,12 @@
 #include "const.cpp"
-#include "megatron.hpp"
+#include "readCSV.hpp"
+#include "utils.hpp"
 
 #include <cctype>
 #include <cstdio>
 #include <fcntl.h>
 #include <iostream>
 #include <unistd.h>
-
-int openFile(const char *fileName, int flags, bool registrar, int saveFd) {
-  int sizePath = 0, sizeFile = 0;
-
-  while (PATH[sizePath] != '\0')
-    sizePath++;
-  while (fileName[sizeFile] != '\0')
-    sizeFile++;
-
-  char fullPath[sizePath + sizeFile + 1];
-
-  for (int i = 0; i < sizePath; ++i)
-    fullPath[i] = PATH[i];
-  for (int i = 0; i < sizeFile; ++i)
-    fullPath[sizePath + i] = fileName[i];
-  fullPath[sizePath + sizeFile] = '\0';
-
-  int fd = open(fullPath, flags, 0644);
-  if (fd == -1) {
-    std::cerr << "Error al abrir el archivo " << fileName << '\n';
-    return -1;
-  }
-
-  if (registrar && saveFd != -1) {
-    registerFile(saveFd, fd, fileName);
-  }
-
-  return fd;
-}
-
-void readInput(const int &fdSave) {
-  int ch;
-
-  while ((ch = getchar()) != EOF) {
-    char read = (char)ch;
-    write(fdSave, &read, 1);
-
-    if (ch == '\n')
-      break;
-  }
-}
-
-void writeInt(const int &fd, int number) {
-  int div = 1;
-  int temp = number;
-  while (temp >= 10) {
-    temp /= 10;
-    div *= 10;
-  }
-
-  while (div > 0) {
-    char digit = '0' + (number / div);
-    write(fd, &digit, 1);
-    number %= div;
-    div /= 10;
-  }
-}
-
-int trimFile(const int &file) {
-  char ch;
-  int startPos = -1, endPos = -1;
-
-  lseek(file, 0, SEEK_SET);
-  while (read(file, &ch, 1) == 1) {
-    if (ch != ' ' && ch != '\n' && ch != '\t' && ch != '\'') {
-      startPos = lseek(file, 0, SEEK_CUR) - 1;
-      break;
-    }
-  }
-
-  if (startPos == -1)
-    return -1;
-
-  off_t fileSize = lseek(file, 0, SEEK_END);
-  for (off_t i = fileSize - 1; i >= 0; --i) {
-    lseek(file, i, SEEK_SET);
-    if (read(file, &ch, 1) != 1)
-      break;
-
-    if (ch != ' ' && ch != '\n' && ch != '\t' && ch != '\'') {
-      endPos = i;
-      break;
-    }
-  }
-
-  lseek(file, startPos, SEEK_SET);
-
-  return endPos - startPos + 1;
-}
-
-void splitLineFile(const int &fd, const int &fdSplit, char delimiter) {
-  char ch;
-  while (read(fd, &ch, 1) == 1) {
-    char input = ch;
-
-    if (ch == delimiter) {
-      input = '\n';
-    }
-
-    if (ch != ' ' && ch != '\t') {
-      write(fdSplit, &input, 1);
-    }
-
-    if (ch == '\n') {
-      break;
-    }
-  }
-}
-
-int findAndMove(const int &fd, char delimiter) {
-  int startPos = lseek(fd, 0, SEEK_CUR);
-  char ch;
-  while (read(fd, &ch, 1) == 1) {
-    if (ch == delimiter) {
-      return lseek(fd, 0, SEEK_CUR);
-    }
-
-    if (ch == '\n') {
-      break;
-    }
-  }
-
-  lseek(fd, startPos, SEEK_SET);
-  return -1;
-}
-
-bool findInLine(const int &fd, char found, char delimiter) {
-  int startPos = lseek(fd, 0, SEEK_CUR);
-  char ch;
-  while (read(fd, &ch, 1) == 1) {
-    if (ch == found) {
-      lseek(fd, startPos, SEEK_SET);
-      return true;
-    }
-
-    if (ch == '\n' || ch == delimiter) {
-      break;
-    }
-  }
-
-  lseek(fd, startPos, SEEK_SET);
-  return false;
-}
-
-bool copyLine(const int &from, const int &to) {
-  char ch;
-  bool copied = false;
-
-  while (read(from, &ch, 1) == 1) {
-    copied = true;
-    write(to, &ch, 1);
-
-    if (ch == '\n') {
-      break;
-    }
-  }
-
-  return copied;
-}
-
-bool removeLastLine(const int &fd) {
-  off_t size = lseek(fd, 0, SEEK_END);
-  if (size == 0)
-    return false;
-
-  char ch;
-  off_t pos = size - 1;
-
-  while (pos >= 0) {
-    lseek(fd, pos, SEEK_SET);
-    if (read(fd, &ch, 1) != 1)
-      return false;
-
-    if (ch == '\n' && pos != size - 1) {
-      if (ftruncate(fd, pos + 1) == -1)
-        return false;
-      return true;
-    }
-
-    --pos;
-  }
-
-  if (ftruncate(fd, 0) == -1)
-    return false;
-  return true;
-}
-
-void registerFile(const int &saveFd, const int &fd, const char *fileName) {
-  lseek(saveFd, 0, SEEK_END);
-  writeInt(saveFd, fd);
-
-  char chNumber = '=';
-  write(saveFd, &chNumber, 1);
-
-  int i = 0;
-  while (fileName[i]) {
-    write(saveFd, &fileName[i], 1);
-    ++i;
-  }
-
-  chNumber = '\n';
-  write(saveFd, &chNumber, 1);
-}
-
-bool searchFd(const int &saveFd, const int &fd) {
-  lseek(saveFd, 0, SEEK_SET);
-
-  while (true) {
-    int startPos = lseek(saveFd, 0, SEEK_CUR);
-    int number = 0;
-    char ch;
-    while (true) {
-      if (read(saveFd, &ch, 1) != 1)
-        return false;
-
-      if (isdigit(ch))
-        number = number * 10 + ch - '0';
-      else
-        break;
-    }
-
-    if (number == fd) {
-      lseek(saveFd, startPos, SEEK_SET);
-      return true;
-    }
-
-    while (true) {
-      if (read(saveFd, &ch, 1) != 1)
-        return false;
-
-      if (ch == '\n') {
-        break;
-      } else
-        return false;
-    }
-  }
-
-  return true;
-}
-
-int nextFd(const int &saveFd) {
-  int startPos = lseek(saveFd, 0, SEEK_SET);
-  if (lseek(saveFd, 0, SEEK_CUR) == 0) {
-    lseek(saveFd, 0, SEEK_SET);
-    char ch;
-    int fd = 0;
-    while (read(saveFd, &ch, 1) == 1 && isdigit(ch))
-      fd = fd * 10 + (ch - '0');
-    return fd;
-  }
-
-  char ch;
-  while (read(saveFd, &ch, 1) == 1) {
-    if (ch == '\n') {
-      int fd = 0;
-      while (read(saveFd, &ch, 1) == 1 && isdigit(ch))
-        fd = fd * 10 + (ch - '0');
-      return fd;
-    }
-  }
-
-  lseek(saveFd, startPos, SEEK_SET);
-  return -1;
-}
-
-int prevFd(int saveFd) {
-  int startPos = lseek(saveFd, 0, SEEK_SET),
-      fileSize = lseek(saveFd, 0, SEEK_END);
-  char ch;
-  bool found = false;
-
-  for (off_t i = fileSize; i >= 0; --i) {
-    lseek(saveFd, i, SEEK_SET);
-
-    if (read(saveFd, &ch, 1) != 1) {
-      lseek(saveFd, startPos, SEEK_SET);
-      return -1;
-    }
-
-    if (found && ch == '=') {
-      --i;
-      lseek(saveFd, i, SEEK_SET);
-
-      int fd = 0, mult = 1;
-      while (i >= 0) {
-        lseek(saveFd, i, SEEK_SET);
-        if (read(saveFd, &ch, 1) != 1 || !isdigit(ch))
-          break;
-
-        fd += (ch - '0') * mult;
-        mult *= 10;
-        --i;
-      }
-
-      return fd;
-    }
-
-    if (ch == '\n') {
-      found = true;
-    }
-  }
-
-  lseek(saveFd, startPos, SEEK_SET);
-  return -1;
-}
-
-int openTSV(const int &input, const int &saveFd) {
-  int sizeTSV = trimFile(input);
-
-  if (sizeTSV == -1 || sizeTSV < 5) {
-    std::cerr << "No se ingreso un archivo correcto";
-    return -1;
-  }
-
-  char fileTSV[sizeTSV + 1];
-  char ch;
-
-  for (int i = 0; i < sizeTSV; ++i) {
-    if (read(input, &ch, 1) == 1) {
-      fileTSV[i] = ch;
-    }
-  }
-
-  fileTSV[sizeTSV] = '\0';
-
-  if (fileTSV[sizeTSV - 4] != '.' || fileTSV[sizeTSV - 3] != 'c' ||
-      fileTSV[sizeTSV - 2] != 's' || fileTSV[sizeTSV - 1] != 'v') {
-    std::cerr << "No se ingreso un archivo tsv";
-    return -1;
-  }
-
-  int fdTSV = openFile(fileTSV, O_RDONLY);
-  registerFile(saveFd, fdTSV, fileTSV);
-  return fdTSV;
-}
-
-int openTxtFromTsv(const int &saveFd) {
-  int start = lseek(saveFd, 0, SEEK_CUR);
-  int sizeFile = 0;
-  char ch;
-
-  while (read(saveFd, &ch, 1) == 1 && ch != '\n') {
-    sizeFile++;
-  }
-
-  lseek(saveFd, start, SEEK_SET);
-  char fileName[sizeFile + 1];
-
-  for (int i = 0; i < sizeFile; ++i) {
-    read(saveFd, &fileName[i], 1);
-  }
-
-  fileName[sizeFile] = '\0';
-
-  fileName[sizeFile - 3] = 't';
-  fileName[sizeFile - 2] = 'x';
-  fileName[sizeFile - 1] = 't';
-
-  int fd = openFile(fileName, READ_WRITE_TRUNC_FLAGS);
-  return fd;
-}
 
 bool openRelationFiles(const int &relations, const int &saveFd) {
   lseek(relations, 0, SEEK_SET);
@@ -377,8 +17,9 @@ bool openRelationFiles(const int &relations, const int &saveFd) {
   while (read(relations, &ch, 1) == 1) {
 
     if (ch == '\n') {
+
       char fileName[sizeFile + 5];
-      lseek(relations, -sizeFile, SEEK_CUR);
+      lseek(relations, -(sizeFile + 1), SEEK_CUR);
 
       for (int i = 0; i < sizeFile; ++i) {
         read(relations, &fileName[i], 1);
@@ -395,360 +36,10 @@ bool openRelationFiles(const int &relations, const int &saveFd) {
 
       sizeFile = 0;
       lseek(relations, 1, SEEK_CUR);
-
     } else {
       ++sizeFile;
     }
   }
-  return true;
-}
-
-void createSchemaTSV(const int &fdTSV, const int &saveFd, const int &fdSchema) {
-  searchFd(saveFd, fdTSV);
-  findAndMove(saveFd, '=');
-
-  char ch;
-  while (read(saveFd, &ch, 1) == 1 && ch != '.') {
-    write(fdSchema, &ch, 1);
-  }
-
-  ch = '#';
-  write(fdSchema, &ch, 1);
-  int parenth = 0;
-  while (read(fdTSV, &ch, 1) == 1) {
-    if (ch == '\r') {
-      continue;
-    }
-
-    if (ch == ',') {
-      ch = '#';
-      write(fdSchema, &ch, 1);
-
-      for (int i = 0; i < BYTES_FOR_ATTRIBUTES; ++i) {
-        ch = '\0';
-        write(fdSchema, &ch, 1);
-      }
-
-      ch = '#';
-      write(fdSchema, &ch, 1);
-    } else if (ch == '\n') {
-      ch = '#';
-      write(fdSchema, &ch, 1);
-
-      for (int i = 0; i < BYTES_FOR_ATTRIBUTES; ++i) {
-        ch = '\0';
-        write(fdSchema, &ch, 1);
-      }
-
-      ch = '\n';
-      write(fdSchema, &ch, 1);
-      return;
-    } else {
-      write(fdSchema, &ch, 1);
-    }
-  }
-
-  ch = '\n';
-  write(fdSchema, &ch, 1);
-
-  close(fdSchema);
-}
-
-State checkState(const int &relations) {
-  char ch;
-  if (read(relations, &ch, 1) != 1) {
-    return UNKNOWN;
-  }
-
-  lseek(relations, -1, SEEK_CUR);
-  switch (ch) {
-  case '\0':
-    return START;
-  case 'V':
-    return IS_VARCHAR;
-  case 'I':
-    return IS_INT;
-  case 'F':
-    return IS_FLOAT;
-  default:
-    return UNKNOWN;
-  }
-}
-
-void comparateTypes(const int &relations, State state, int &lengthAttribute) {
-
-  if (state == START)
-    return;
-
-  int startPos = lseek(relations, 0, SEEK_CUR);
-  bool changeType = checkState(relations) != state;
-  if (checkState(relations) == START || changeType) {
-
-    char ch;
-    if (changeType) {
-      int lenght = 0;
-      findAndMove(relations, '(');
-
-      while (read(relations, &ch, 0) == 1 && isdigit(ch))
-        lenght = lenght * 10 + (ch - '0');
-
-      if (lenght > lengthAttribute)
-        lengthAttribute = lenght;
-
-      lseek(relations, startPos, SEEK_SET);
-    }
-
-    if (state == IS_VARCHAR) {
-      ch = 'V';
-      write(relations, &ch, 1);
-      ch = 'A';
-      write(relations, &ch, 1);
-      ch = 'R';
-      write(relations, &ch, 1);
-      ch = 'C';
-      write(relations, &ch, 1);
-      ch = 'H';
-      write(relations, &ch, 1);
-      ch = 'A';
-      write(relations, &ch, 1);
-      ch = 'R';
-      write(relations, &ch, 1);
-    } else if (state == IS_FLOAT) {
-      ch = 'F';
-      write(relations, &ch, 1);
-      ch = 'L';
-      write(relations, &ch, 1);
-      ch = 'O';
-      write(relations, &ch, 1);
-      ch = 'A';
-      write(relations, &ch, 1);
-      ch = 'T';
-      write(relations, &ch, 1);
-    } else if (state == IS_INT) {
-      ch = 'I';
-      write(relations, &ch, 1);
-      ch = 'N';
-      write(relations, &ch, 1);
-      ch = 'T';
-      write(relations, &ch, 1);
-    } else {
-      return;
-    }
-
-    ch = '(';
-    write(relations, &ch, 1);
-    writeInt(relations, lengthAttribute);
-    ch = ')';
-    write(relations, &ch, 1);
-
-    if (changeType) {
-      while (read(relations, &ch, 0) == 1 &&
-             (ch != '\0' || ch != '#' || ch != '\n')) {
-        ch = '\0';
-        lseek(relations, -1, SEEK_CUR);
-        write(relations, &ch, 1);
-      }
-    }
-  } else {
-    char ch;
-    int lenght = 0;
-    findAndMove(relations, '(');
-
-    while (read(relations, &ch, 0) == 1 && isdigit(ch))
-      lenght = lenght * 10 + (ch - '0');
-
-    if (lenght < lengthAttribute)
-      lengthAttribute = lenght;
-
-    lseek(relations, -2, SEEK_CUR);
-    while (read(relations, &ch, 0) == 1 && ch != '(') {
-      lseek(relations, -2, SEEK_CUR);
-    }
-
-    writeInt(relations, lengthAttribute);
-    ch = '(';
-    write(relations, &ch, 1);
-  }
-
-  lseek(relations, -1, SEEK_CUR);
-}
-
-void readRegistersTsv(const int &fdTSV,
-                      const int &fdTXT,
-                      const int &relations) {
-  lseek(relations, 0, SEEK_SET);
-  findAndMove(relations, '#');
-  findAndMove(relations, '#');
-
-  char ch;
-  State state = START;
-  int lengthAttribute = 0;
-  bool inQuotes = false;
-  bool floatPointUsed = false;
-
-  while (read(fdTSV, &ch, 1) == 1) {
-    if (ch == '\r')
-      continue;
-  
-    std::cout << ch;
-    switch (state) {
-    case START:
-      if (ch == '\"') {
-        inQuotes = true;
-        state = IS_VARCHAR;
-        continue;
-      } else if (isalpha(ch) || isspace(ch)) {
-        state = IS_VARCHAR;
-        write(fdTXT, &ch, 1);
-      } else if (isdigit(ch)) {
-        state = IS_INT;
-        write(fdTXT, &ch, 1);
-      } else if (ch == '-') {
-        state = IS_INT;
-        write(fdTXT, &ch, 1);
-      } else if (ch == ',') {
-        comparateTypes(relations, state, lengthAttribute);
-        write(fdTXT, "#", 1);
-
-        findAndMove(relations, '#');
-        findAndMove(relations, '#');
-        state = START;
-      } else if (ch == '\n') {
-        comparateTypes(relations, state, lengthAttribute);
-        write(fdTXT, "\n", 1);
-
-        lseek(relations, 0, SEEK_SET);
-        findAndMove(relations, '#');
-        findAndMove(relations, '#');
-        state = START;
-      } else {
-
-        state = IS_VARCHAR;
-        write(fdTXT, &ch, 1);
-      }
-      ++lengthAttribute;
-      continue;
-
-    case IS_VARCHAR:
-      if (ch == '\"') {
-
-        if (read(fdTSV, &ch, 1) == 1) {
-          if (ch == ',' || ch == '\n') {
-            inQuotes = false;
-            comparateTypes(relations, state, lengthAttribute);
-            ch = (ch == ',') ? '#' : '\n';
-            write(fdTXT, &ch, 1);
-
-            if (ch == '\n') {
-              lseek(relations, 0, SEEK_SET);
-            }
-
-            findAndMove(relations, '#');
-            findAndMove(relations, '#');
-
-            state = START;
-            lengthAttribute = 0;
-            floatPointUsed = false;
-          } else {
-            write(fdTXT, &ch, 1);
-            ++lengthAttribute;
-          }
-        } else {
-          continue;
-        }
-      } else {
-        write(fdTXT, &ch, 1);
-        ++lengthAttribute;
-      }
-      continue;
-
-    case IS_INT:
-      if (isdigit(ch)) {
-        write(fdTXT, &ch, 1);
-        ++lengthAttribute;
-      } else if (ch == '.' && !floatPointUsed) {
-        state = IS_FLOAT;
-        floatPointUsed = true;
-        write(fdTXT, &ch, 1);
-        ++lengthAttribute;
-      } else if (ch == ',' || ch == '\n') {
-        comparateTypes(relations, state, lengthAttribute);
-        ch = (ch == ',') ? '#' : '\n';
-        write(fdTXT, &ch, 1);
-
-        if (ch == '\n') {
-          lseek(relations, 0, SEEK_SET);
-        }
-
-        findAndMove(relations, '#');
-        findAndMove(relations, '#');
-
-        state = START;
-        lengthAttribute = 0;
-        floatPointUsed = false;
-      } else {
-
-        state = IS_VARCHAR;
-        write(fdTXT, &ch, 1);
-        ++lengthAttribute;
-      }
-      continue;
-
-    case IS_FLOAT:
-      if (isdigit(ch)) {
-        write(fdTXT, &ch, 1);
-        ++lengthAttribute;
-      } else if (ch == ',' || ch == '\n') {
-        comparateTypes(relations, state, lengthAttribute);
-        ch = (ch == ',') ? '#' : '\n';
-        write(fdTXT, &ch, 1);
-
-        if (ch == '\n') {
-          lseek(relations, 0, SEEK_SET);
-        }
-
-        findAndMove(relations, '#');
-        findAndMove(relations, '#');
-
-        state = START;
-        lengthAttribute = 0;
-        floatPointUsed = false;
-      } else {
-
-        state = IS_VARCHAR;
-        write(fdTXT, &ch, 1);
-        ++lengthAttribute;
-      }
-      continue;
-
-    default:
-      continue;
-    }
-
-    if (lseek(fdTSV, 0, SEEK_CUR) == lseek(fdTSV, 0, SEEK_END))
-      break;
-  }
-}
-
-bool readTsv(const int &input, const int &saveFd) {
-  int fdTSV = openTSV(input, saveFd);
-  int fdSchema = openFile(SCHEMA, READ_WRITE_TRUNC_FLAGS);
-  if (fdTSV == -1) {
-    return false;
-  }
-
-  searchFd(saveFd, fdTSV);
-
-  findAndMove(saveFd, '=');
-
-  int fdTXT = openTxtFromTsv(saveFd);
-
-  createSchemaTSV(fdTSV, saveFd, fdSchema);
-
-  readRegistersTsv(fdTSV, fdTXT, fdSchema);
-
-  close(fdTSV);
-  close(fdTXT);
   return true;
 }
 
@@ -1012,11 +303,15 @@ void addAllAttributes(const int &relationsTmp, const int &attributesTmp) {
 
 bool isAsterisk(const int &relationsTmp) {
   char ch1, ch2;
-  if (read(relationsTmp, &ch1, 1) != 1 || ch1 != '*')
+  if (read(relationsTmp, &ch1, 1) != 1 || ch1 != '*'){
+    lseek(relationsTmp, 0, SEEK_SET);
     return false;
+  }
 
-  if (read(relationsTmp, &ch2, 1) != 1 || ch2 != '\n')
+  if (read(relationsTmp, &ch2, 1) != 1 || ch2 != '\n'){
+    lseek(relationsTmp, 0, SEEK_SET);
     return false;
+  }
 
   if (lseek(relationsTmp, 0, SEEK_CUR) != lseek(relationsTmp, 0, SEEK_END))
     return false;
@@ -1078,6 +373,137 @@ void insertRegisters() {
   close(input);
 }
 
+
+void cartesianProduct(int saveFd,
+                      int attributesTmpFd,
+                      int relationsTmpFd,
+                      int linesTmpFd,
+                      int resultTmpFd) {
+  int nivel = 0;
+
+  lseek(saveFd, 0, SEEK_SET);
+
+  // Contar cantidad de relaciones
+  int cantidadRelaciones = 0;
+  {
+    char ch;
+    while (read(saveFd, &ch, 1) == 1) {
+      if (ch == '\n') cantidadRelaciones++;
+    }
+    lseek(saveFd, 0, SEEK_SET);
+  }
+
+  while (true) {
+    if (nivel == cantidadRelaciones) {
+      lseek(attributesTmpFd, 0, SEEK_SET);
+
+      int totalAtributos = 0;
+      char ch;
+      while (read(attributesTmpFd, &ch, 1) == 1) {
+        if (ch == '\n') totalAtributos++;
+      }
+      lseek(attributesTmpFd, 0, SEEK_SET);
+
+      int atributoIndex = 0;
+      while (atributoIndex < totalAtributos) {
+        char chLine, chAttributes;
+        off_t relStart = lseek(attributesTmpFd, 0, SEEK_CUR);
+
+        if (findAndMove(attributesTmpFd, '.') == 0)
+          break;
+
+        int relSize = lseek(attributesTmpFd, 0, SEEK_CUR) - relStart - 1;
+        lseek(attributesTmpFd, relStart, SEEK_SET);
+
+        lseek(linesTmpFd, 0, SEEK_SET);
+        off_t lineStart = lseek(linesTmpFd, 0, SEEK_CUR);
+
+        while (true) {
+          if (read(attributesTmpFd, &chAttributes, 1) != 1) break;
+          if (read(linesTmpFd, &chLine, 1) != 1) return;
+
+          if (chAttributes == '.' && chLine == '#') {
+            findAndMove(attributesTmpFd, '#', 2);
+
+            int colPos = 0;
+            while (read(attributesTmpFd, &chAttributes, 1) == 1 && isdigit(chAttributes)) {
+              colPos = colPos * 10 + (chAttributes - '0');
+            }
+
+            lseek(linesTmpFd, lineStart, SEEK_SET);
+            findAndMove(linesTmpFd, '#', colPos + 1);
+
+            while (read(linesTmpFd, &chLine, 1) == 1 && chLine != '\n' && chLine != '#') {
+              write(resultTmpFd, &chLine, 1);
+            }
+
+            if (atributoIndex < totalAtributos - 1) {
+              char sep = '#';
+              write(resultTmpFd, &sep, 1);
+            }
+
+            atributoIndex++;
+            lineStart = lseek(linesTmpFd, 0, SEEK_SET);
+            break;
+          }
+
+          if (chAttributes != chLine) {
+            lseek(attributesTmpFd, relStart, SEEK_SET);
+            findAndMove(linesTmpFd, '\n');
+            lineStart = lseek(linesTmpFd, 0, SEEK_CUR);
+          }
+        }
+      }
+
+      char nl = '\n';
+      write(resultTmpFd, &nl, 1);
+
+      nivel--;
+      if (nivel < 0) break;
+
+      removeLastLine(linesTmpFd);
+      int fdAnterior = prevFd(saveFd);
+      if (fdAnterior == -1) continue;
+
+      lseek(fdAnterior, 0, SEEK_SET);
+      continue;
+    }
+
+    int fdActual = nextFd(saveFd);
+
+    char ch;
+    bool hasLine = false;
+  
+    while (read(saveFd, &ch, 1) == 1 && ch != '.') {
+      write(linesTmpFd, &ch, 1);
+    }
+
+    ch = '#';
+    write(linesTmpFd, &ch, 1);
+
+    while (read(fdActual, &ch, 1) == 1) {
+      hasLine = true;
+      write(linesTmpFd, &ch, 1);
+      if (ch == '\n') break;
+    }
+
+    if (hasLine) {
+      nivel++;
+    } else {
+      // No hay más líneas: retroceder de nivel
+      nivel--;
+      if (nivel < 0) break;
+      removeLastLine(linesTmpFd);
+
+      int fdAnterior = prevFd(saveFd);
+      if (fdAnterior == -1) break;
+
+      lseek(fdAnterior, 0, SEEK_SET);
+    }
+  }
+}
+
+
 void selectMenu() {
   std::cin.ignore();
   int saveFd = openFile(SAVE_FD_TMP, READ_WRITE_TRUNC_FLAGS);
@@ -1118,6 +544,11 @@ void selectMenu() {
     std::cerr << "Error al buscar los registros de las relaciones\n";
     return;
   }
+  
+  int linesTmp = openFile(LINES_TMP, READ_WRITE_TRUNC_FLAGS);
+  int resultTmp = openFile(RESULT_TMP, READ_WRITE_TRUNC_FLAGS);
+
+  cartesianProduct(saveFd, attributesTmp, relations, linesTmp, resultTmp);
 
   close(saveFd);
 
