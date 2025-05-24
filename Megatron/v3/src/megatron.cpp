@@ -98,4 +98,8 @@ void Megatron::initializeBootSector(int numberdisks,
                                     int numbersectors) {
   diskController = new DiskController(numberdisks, numbertracks, numbersectors);
   diskController->head->resetPosition();
+  diskController->head->openCurrentSectorFD();
+  diskController->writeInt(numberdisks);
+  diskController->writeInt(numbertracks);
+  diskController->writeInt(numbersectors);
 }

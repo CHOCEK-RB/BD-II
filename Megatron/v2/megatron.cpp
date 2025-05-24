@@ -530,7 +530,7 @@ void insertRegisters() {
     return;
   }
 
-  std::cout << "& Nombre del archivo TSV : ";
+  std::cout << "& Nombre del archivo CSV : ";
   readInput(input);
 
   readTsv(input, saveFd);

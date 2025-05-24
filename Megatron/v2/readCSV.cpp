@@ -6,34 +6,34 @@
 #include <iostream>
 #include <unistd.h>
 
-int openTSV(const int &input, const int &saveFd) {
-  int sizeTSV = trimFile(input);
+int openCSV(const int &input, const int &saveFd) {
+  int sizeCSV = trimFile(input);
 
-  if (sizeTSV == -1 || sizeTSV < 5) {
+  if (sizeCSV == -1 || sizeCSV < 5) {
     std::cerr << "No se ingreso un archivo correcto";
     return -1;
   }
 
-  char fileTSV[sizeTSV + 1];
+  char fileCSV[sizeCSV + 1];
   char ch;
 
-  for (int i = 0; i < sizeTSV; ++i) {
+  for (int i = 0; i < sizeCSV; ++i) {
     if (read(input, &ch, 1) == 1) {
-      fileTSV[i] = ch;
+      fileCSV[i] = ch;
     }
   }
 
-  fileTSV[sizeTSV] = '\0';
+  fileCSV[sizeCSV] = '\0';
 
-  if (fileTSV[sizeTSV - 4] != '.' || fileTSV[sizeTSV - 3] != 'c' ||
-      fileTSV[sizeTSV - 2] != 's' || fileTSV[sizeTSV - 1] != 'v') {
-    std::cerr << "No se ingreso un archivo tsv";
+  if (fileCSV[sizeCSV - 4] != '.' || fileCSV[sizeCSV - 3] != 'c' ||
+      fileCSV[sizeCSV - 2] != 's' || fileCSV[sizeCSV - 1] != 'v') {
+    std::cerr << "No se ingreso un archivo csv";
     return -1;
   }
 
-  int fdTSV = openFile(fileTSV, O_RDONLY);
-  registerFile(saveFd, fdTSV, fileTSV);
-  return fdTSV;
+  int fdCSV = openFile(fileCSV, O_RDONLY);
+  registerFile(saveFd, fdCSV, fileCSV);
+  return fdCSV;
 }
 
 int openTxtFromTsv(const int &saveFd) {
@@ -62,8 +62,8 @@ int openTxtFromTsv(const int &saveFd) {
   return fd;
 }
 
-void createSchemaTSV(const int &fdTSV, const int &saveFd, const int &fdSchema) {
-  searchFd(saveFd, fdTSV);
+void createSchemaCSV(const int &fdCSV, const int &saveFd, const int &fdSchema) {
+  searchFd(saveFd, fdCSV);
   findAndMove(saveFd, '=');
   
   lseek(fdSchema, 0, SEEK_END);
@@ -77,7 +77,7 @@ void createSchemaTSV(const int &fdTSV, const int &saveFd, const int &fdSchema) {
   ch = '#';
   write(fdSchema, &ch, 1);
   int parenth = 0;
-  while (read(fdTSV, &ch, 1) == 1) {
+  while (read(fdCSV, &ch, 1) == 1) {
     if (ch == '\r') {
       continue;
     }
@@ -223,7 +223,7 @@ void comparateTypes(const int &relations, State state, int &lengthAttribute) {
   }
 }
 
-void readRegistersTsv(const int &fdTSV,
+void readRegistersTsv(const int &fdCSV,
                       const int &fdTXT,
                       const int &relations) {
   int startPos = lseek(relations, 0, SEEK_CUR);
@@ -237,7 +237,7 @@ void readRegistersTsv(const int &fdTSV,
   int lengthAttribute = 0;
   bool inQuotes = false;
 
-  while (read(fdTSV, &ch, 1) == 1) {
+  while (read(fdCSV, &ch, 1) == 1) {
     if (ch == '\r')
       continue;
 
@@ -291,7 +291,7 @@ void readRegistersTsv(const int &fdTSV,
     case IS_VARCHAR:
       if (ch == '\"') {
 
-        if (read(fdTSV, &ch, 1) == 1) {
+        if (read(fdCSV, &ch, 1) == 1) {
           if (ch == ',' || ch == '\n') {
             inQuotes = false;
             comparateTypes(relations, state, lengthAttribute);
@@ -396,31 +396,31 @@ void readRegistersTsv(const int &fdTSV,
       continue;
     }
 
-    if (lseek(fdTSV, 0, SEEK_CUR) == lseek(fdTSV, 0, SEEK_END))
+    if (lseek(fdCSV, 0, SEEK_CUR) == lseek(fdCSV, 0, SEEK_END))
       break;
   }
 }
 
 bool readTsv(const int &input, const int &saveFd) {
-  int fdTSV = openTSV(input, saveFd);
+  int fdCSV = openCSV(input, saveFd);
   int fdSchema = openFile(SCHEMA, READ_WRITE_FLAGS, true, saveFd);
-  if (fdTSV == -1) {
+  if (fdCSV == -1) {
     return false;
   }
 
-  searchFd(saveFd, fdTSV);
+  searchFd(saveFd, fdCSV);
 
   findAndMove(saveFd, '=');
 
   int fdTXT = openTxtFromTsv(saveFd);
 
-  createSchemaTSV(fdTSV, saveFd, fdSchema);
+  createSchemaCSV(fdCSV, saveFd, fdSchema);
 
-  readRegistersTsv(fdTSV, fdTXT, fdSchema);
+  readRegistersTsv(fdCSV, fdTXT, fdSchema);
 
   clearFile(saveFd, fdSchema);
 
-  close(fdTSV);
+  close(fdCSV);
   close(fdTXT);
   return true;
 }

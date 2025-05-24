@@ -8,6 +8,8 @@ public:
   int currentTrack;
   int currentSector;
 
+  int currentFd;
+
   Head() : currentDisk(0), currentSurface(0), currentTrack(0), currentSector(0) {};
 
   void moveTo(int disk, int surface, int track, int sector);
@@ -16,9 +18,14 @@ public:
   void nextTrack();
   void nextSurface();
   void nextDisk();
+  
+  void write();
+  void read();
 
   int openCurrentSectorFD();
   void resetPosition();
+
+
 };
 
 #endif // HEAD_HPP

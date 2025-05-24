@@ -1,5 +1,6 @@
 #include "const.cpp"
 #include <sys/stat.h>
+#include <unistd.h>
 #include <utils.hpp>
 
 bool utils::directoryExists(const char *path) {
@@ -46,6 +47,29 @@ void utils::writeInt(int num, char *line, int &pos) {
     num %= div;
     div /= 10;
   }
+}
+
+void utils::writeShort(int fd, int value) {
+  char ch;
+  ch = value & 0xFF;
+  write(fd, &ch, 1);
+
+  ch = (value >> 8) & 0xFF;
+  write(fd, &ch, 1);
+}
+void utils::writeInt(int fd, int value) {
+  char ch;
+  ch = value & 0xFF;
+  write(fd, &ch, 1);
+
+  ch = (value >> 8) & 0xFF;
+  write(fd, &ch, 1);
+
+  ch = (value >> 16) & 0xFF;
+  write(fd, &ch, 1);
+
+  ch = (value >> 24) & 0xFF;
+  write(fd, &ch, 1);
 }
 
 void utils::createFullPath(int disk,

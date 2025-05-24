@@ -17,13 +17,13 @@ int Head::openCurrentSectorFD() {
   utils::createFullPath(
       currentDisk, currentSurface, currentTrack, currentSector, fullPath);
 
-  int fd = open(fullPath, O_WRONLY, 0644);
+  currentFd = open(fullPath, O_WRONLY, 0644);
 
-  if (fd == -1)
+  if (currentFd == -1)
     std::cerr << "No se pudo abrir el sector en la direccion : " << fullPath
               << "\n";
 
-  return fd;
+  return currentFd;
 }
 
 void Head::resetPosition() {

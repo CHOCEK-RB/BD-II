@@ -24,8 +24,11 @@ public:
   void createRelation(const char *name, int sizeBytes);
   void listRelations();
 
-  void writeCharToCurrentSector(char c);
-  char readCharFromCurrentSector();
+  int writeChar(char ch);
+  int readChar(char &ch);
+
+  int writeInt(int number);
+  int readInt(int &number);
 };
 
 #endif // !DISKCONTROLLER_HPP
