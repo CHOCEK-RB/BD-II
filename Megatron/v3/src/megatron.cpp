@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <diskController.hpp>
 #include <megatron.hpp>
@@ -13,8 +14,36 @@
 
 Megatron::~Megatron() { delete diskController; }
 
+void Megatron::init(){
+  std::cout << "% Megatron 3000\n";
+  std::cout << "\tWelcome to Megatron 3000!\n\n";
+  std::cout << "% Opciones:\n";
+  std::cout << "1) Construir disco\n";
+  std::cout << "2) SELECT\n";
+  std::cout << "3) Salir\n\n";
+
+  int choice;
+  std::cout << "Opcion : ";
+  std::cin >> choice;
+
+  switch (choice) {
+  case 1:
+    buildStructure();
+    break;
+  case 2:
+
+  case 3:
+    std::cout << "Hasta luego.\n";
+    return;
+  default:
+    std::cout << "Opcion invalida.\n";
+    break;
+  }
+}
+
 void Megatron::buildStructure() {
-  unsigned int numberDisks, numberTracks, numberSectors;
+  unsigned int numberDisks, numberTracks, numberSectors, numberBytes,
+      sectorsBlock;
 
   std::cout << "& Cantidad de discos : ";
   std::cin >> numberDisks;
@@ -24,6 +53,12 @@ void Megatron::buildStructure() {
 
   std::cout << "& Cantidad de sectores por pista : ";
   std::cin >> numberSectors;
+
+  std::cout << "& Cantidad de bytes por sector : ";
+  std::cin >> numberBytes;
+
+  std::cout << "& Cantidad de sectores por bloque : ";
+  std::cin >> sectorsBlock;
 
   // Eliminar estructura anterior
   rmdir(PATH);
@@ -90,16 +125,44 @@ void Megatron::buildStructure() {
     }
   }
 
-  initializeBootSector(numberDisks, numberTracks, numberSectors);
+  initializeBootSector(
+      numberDisks, numberTracks, numberSectors, numberBytes, sectorsBlock);
 }
 
-void Megatron::initializeBootSector(int numberdisks,
-                                    int numbertracks,
-                                    int numbersectors) {
-  diskController = new DiskController(numberdisks, numbertracks, numbersectors);
+void Megatron::initializeBootSector(unsigned int numberDisks,
+                                    unsigned int numberTracks,
+                                    unsigned int numberSectors,
+                                    unsigned int numberBytes,
+                                    unsigned int sectorsBlock) {
+  diskController = new DiskController(
+      numberDisks, numberTracks, numberSectors, numberBytes, sectorsBlock);
+
   diskController->head->resetPosition();
   diskController->head->openCurrentSectorFD();
-  diskController->writeInt(numberdisks);
-  diskController->writeInt(numbertracks);
-  diskController->writeInt(numbersectors);
+
+  // 4 bytes: número de discos
+  diskController->writeBinary(numberDisks);
+  // 4 bytes: pistas por superficie
+  diskController->writeBinary(numberTracks);
+  // 4 bytes: sectores por pista
+  diskController->writeBinary(numberSectors);
+  // 4 bytes: bytes por sector
+  diskController->writeBinary(numberBytes);
+  // 4 bytes: sectores por bloque
+  diskController->writeBinary(sectorsBlock);
+
+  // 2 bytes: bloque de inicio para FAT (después del boot = bloque 1)
+  uint16_t fatBlockStart = 1;
+  diskController->writeBinary(fatBlockStart);
+
+  // 2 bytes: bloque de inicio para metadatos (después de FAT = bloque 2)
+  uint16_t metaBlockStart = 2;
+  diskController->writeBinary(metaBlockStart);
+
+  // 2 bytes: bloque de inicio para datos reales (después de metadatos = bloque 3)
+  uint16_t dataBlockStart = 3;
+  diskController->writeBinary(dataBlockStart);
+
+  // 1 byte: tipo de atributos (0 = estáticos, 1 = variados)
+  diskController->writeBinary(uint8_t(0));
 }

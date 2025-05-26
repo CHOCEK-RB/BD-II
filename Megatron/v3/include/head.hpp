@@ -14,18 +14,8 @@ public:
 
   void moveTo(int disk, int surface, int track, int sector);
 
-  void nextSector();
-  void nextTrack();
-  void nextSurface();
-  void nextDisk();
-  
-  void write();
-  void read();
-
   int openCurrentSectorFD();
   void resetPosition();
-
-
 };
 
 #endif // HEAD_HPP

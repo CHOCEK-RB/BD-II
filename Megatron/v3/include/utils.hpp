@@ -7,8 +7,6 @@ class utils{
   static bool directoryExists(const char *path);
   static int countDigits(int num);
   static void writeInt(int num, char *line, int &pos);
-  static void writeShort(int fd, int value); 
-  static void writeInt(int fd, int value); 
 
   static void createFullPath(int disk, int superface, int track, int sector, char *fullPath);
 };

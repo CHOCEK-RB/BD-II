@@ -11,8 +11,11 @@ public:
   
   Megatron() = default;
   ~Megatron();
+
+  void init();
+
   void buildStructure();
-  void initializeBootSector(int numberdisks, int numbertracks, int numbersectors);
+  void initializeBootSector(unsigned int numberdisks, unsigned int numbertracks, unsigned int numbersectors, unsigned int numberBytes, unsigned int sectorsBlock);
 };
 
 #endif
